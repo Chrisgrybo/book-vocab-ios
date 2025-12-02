@@ -105,7 +105,8 @@ extension VocabWord {
         exampleSentence: "The ephemeral beauty of the sunset lasted only moments."
     )
     
-    /// Array of sample vocab words for list previews.
+    /// Array of sample vocab words for list previews and study testing.
+    /// Includes enough words for quiz mode (minimum 4 required).
     static let samples: [VocabWord] = [
         VocabWord(
             bookId: UUID(),
@@ -131,6 +132,47 @@ extension VocabWord {
             antonyms: ["Misfortune", "Design"],
             exampleSentence: "It was pure serendipity that they met at the bookstore.",
             mastered: true
+        ),
+        VocabWord(
+            bookId: UUID(),
+            word: "Eloquent",
+            definition: "Fluent or persuasive in speaking or writing",
+            synonyms: ["Articulate", "Expressive"],
+            antonyms: ["Inarticulate", "Tongue-tied"],
+            exampleSentence: "The lawyer gave an eloquent closing argument."
+        ),
+        VocabWord(
+            bookId: UUID(),
+            word: "Pragmatic",
+            definition: "Dealing with things sensibly and realistically",
+            synonyms: ["Practical", "Realistic"],
+            antonyms: ["Idealistic", "Impractical"],
+            exampleSentence: "She took a pragmatic approach to solving the problem."
+        ),
+        VocabWord(
+            bookId: UUID(),
+            word: "Benevolent",
+            definition: "Well-meaning and kindly",
+            synonyms: ["Kind", "Charitable"],
+            antonyms: ["Malevolent", "Cruel"],
+            exampleSentence: "The benevolent donor gave generously to the charity.",
+            mastered: true
+        ),
+        VocabWord(
+            bookId: UUID(),
+            word: "Cacophony",
+            definition: "A harsh, discordant mixture of sounds",
+            synonyms: ["Noise", "Discord"],
+            antonyms: ["Harmony", "Melody"],
+            exampleSentence: "The cacophony of car horns filled the busy street."
+        ),
+        VocabWord(
+            bookId: UUID(),
+            word: "Diligent",
+            definition: "Having or showing care in one's work or duties",
+            synonyms: ["Hardworking", "Industrious"],
+            antonyms: ["Lazy", "Negligent"],
+            exampleSentence: "The diligent student always completed homework on time."
         )
     ]
 }

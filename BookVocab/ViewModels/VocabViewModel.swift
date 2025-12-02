@@ -5,9 +5,15 @@
 //  ViewModel for managing vocabulary words.
 //  Handles fetching, adding, and updating vocab words via Supabase.
 //
+//  DEBUG: Includes logging for mastered status updates.
+//
 
 import Foundation
 import SwiftUI
+import os.log
+
+/// Logger for VocabViewModel debugging
+private let logger = Logger(subsystem: "com.bookvocab.app", category: "VocabViewModel")
 
 /// ViewModel responsible for managing vocabulary words.
 /// Published as an environment object to share vocab data across views.
@@ -169,10 +175,36 @@ class VocabViewModel: ObservableObject {
     /// Toggles the mastered status of a vocabulary word.
     /// - Parameter word: The word to update
     func toggleMastered(_ word: VocabWord) async {
-        guard let index = allWords.firstIndex(where: { $0.id == word.id }) else { return }
+        guard let index = allWords.firstIndex(where: { $0.id == word.id }) else {
+            logger.warning("📝 toggleMastered: Word '\(word.word)' not found in allWords")
+            return
+        }
+        
+        let newStatus = !allWords[index].mastered
+        logger.info("📝 Toggling mastered status for '\(word.word)' to \(newStatus)")
         
         // TODO: Implement actual Supabase update
-        allWords[index].mastered.toggle()
+        allWords[index].mastered = newStatus
+        
+        logger.debug("📝 Updated '\(word.word)' mastered status to \(newStatus)")
+    }
+    
+    /// Sets the mastered status of a vocabulary word to a specific value.
+    /// - Parameters:
+    ///   - word: The word to update
+    ///   - mastered: The new mastered status
+    func setMastered(_ word: VocabWord, to mastered: Bool) async {
+        guard let index = allWords.firstIndex(where: { $0.id == word.id }) else {
+            logger.warning("📝 setMastered: Word '\(word.word)' not found in allWords")
+            return
+        }
+        
+        logger.info("📝 Setting mastered status for '\(word.word)' to \(mastered)")
+        
+        // TODO: Implement actual Supabase update
+        allWords[index].mastered = mastered
+        
+        logger.debug("📝 Set '\(word.word)' mastered status to \(mastered)")
     }
     
     /// Deletes a vocabulary word.

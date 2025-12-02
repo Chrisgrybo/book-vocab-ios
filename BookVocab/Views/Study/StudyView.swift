@@ -2,14 +2,28 @@
 //  StudyView.swift
 //  BookVocab
 //
-//  Study section placeholder for flashcards and quizzes.
-//  Will be expanded with full study functionality later.
+//  Main study section providing access to flashcards and quizzes.
+//  Users can select which book's vocabulary to study or review all words.
+//
+//  Features:
+//  - Book/source selection for study
+//  - Flashcard mode with flip and swipe
+//  - Multiple choice quiz
+//  - Fill-in-the-blank quiz
+//  - Progress statistics
+//  - Empty state handling
 //
 
 import SwiftUI
+import os.log
+
+/// Logger for StudyView debugging
+private let logger = Logger(subsystem: "com.bookvocab.app", category: "StudyView")
+
+// MARK: - Study View
 
 /// Main study section view providing access to flashcards and quizzes.
-/// This is a placeholder that will be expanded with full study functionality.
+/// Users can select which vocabulary words to study and choose their study mode.
 struct StudyView: View {
     
     // MARK: - Environment
@@ -17,19 +31,70 @@ struct StudyView: View {
     /// Access to the shared vocab view model.
     @EnvironmentObject var vocabViewModel: VocabViewModel
     
+    /// Access to the shared books view model.
+    @EnvironmentObject var booksViewModel: BooksViewModel
+    
     // MARK: - State
     
-    /// Controls presentation of the flashcard view.
+    /// Controls presentation of the flashcard session.
     @State private var showingFlashcards: Bool = false
     
-    /// Controls presentation of the quiz view.
-    @State private var showingQuiz: Bool = false
+    /// Controls presentation of the multiple choice quiz.
+    @State private var showingMultipleChoice: Bool = false
+    
+    /// Controls presentation of the fill-in-blank quiz.
+    @State private var showingFillInBlank: Bool = false
+    
+    /// Controls presentation of the source selection sheet.
+    @State private var showingSourceSelection: Bool = false
+    
+    /// The currently selected study source.
+    @State private var selectedSource: StudySource = .allWords
+    
+    /// Whether to study only learning words (not mastered).
+    @State private var learningOnly: Bool = true
+    
+    /// The study mode being launched.
+    @State private var pendingMode: StudyMode?
     
     // MARK: - Computed Properties
     
+    /// Words available for the selected source.
+    private var availableWords: [VocabWord] {
+        switch selectedSource {
+        case .allWords:
+            return vocabViewModel.allWords
+        case .book(let book):
+            return vocabViewModel.fetchWords(forBook: book.id)
+        }
+    }
+    
+    /// Words available for study (filtered by learning status if needed).
+    private var studyableWords: [VocabWord] {
+        if learningOnly {
+            return availableWords.filter { !$0.mastered }
+        }
+        return availableWords
+    }
+    
     /// Check if there are enough words to study.
     private var hasEnoughWords: Bool {
-        vocabViewModel.learningWords.count >= 1
+        studyableWords.count >= 1
+    }
+    
+    /// Check if there are enough words for a quiz (need 4 for multiple choice).
+    private var hasEnoughForQuiz: Bool {
+        availableWords.count >= 4
+    }
+    
+    /// Number of mastered words in selected source.
+    private var masteredCount: Int {
+        availableWords.filter { $0.mastered }.count
+    }
+    
+    /// Number of learning words in selected source.
+    private var learningCount: Int {
+        availableWords.filter { !$0.mastered }.count
     }
     
     // MARK: - Body
@@ -38,28 +103,77 @@ struct StudyView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
+                    // Source selection card
+                    sourceSelectionCard
+                    
                     // Stats overview
                     statsCard
                     
                     // Study modes
                     studyModesSection
                     
-                    // Quick actions
-                    quickActionsSection
+                    // Quick review section
+                    if hasEnoughWords {
+                        quickReviewSection
+                    }
                 }
                 .padding()
             }
             .navigationTitle("Study")
-            .sheet(isPresented: $showingFlashcards) {
-                FlashcardsPlaceholderView()
+            .background(Color(.systemGroupedBackground))
+            .sheet(isPresented: $showingSourceSelection) {
+                SourceSelectionSheet(
+                    selectedSource: $selectedSource,
+                    vocabViewModel: vocabViewModel,
+                    booksViewModel: booksViewModel
+                )
             }
-            .sheet(isPresented: $showingQuiz) {
-                QuizPlaceholderView()
+            .fullScreenCover(isPresented: $showingFlashcards) {
+                FlashcardSessionView(source: selectedSource, learningOnly: learningOnly)
+            }
+            .fullScreenCover(isPresented: $showingMultipleChoice) {
+                QuizSessionView(source: selectedSource, quizMode: .multipleChoice)
+            }
+            .fullScreenCover(isPresented: $showingFillInBlank) {
+                QuizSessionView(source: selectedSource, quizMode: .fillInBlank)
             }
         }
     }
     
     // MARK: - View Components
+    
+    /// Card for selecting which words to study.
+    private var sourceSelectionCard: some View {
+        Button {
+            showingSourceSelection = true
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Studying")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    
+                    Text(selectedSource.displayName)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    
+                    Text("\(studyableWords.count) words available")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(.tertiary)
+            }
+            .padding()
+            .background(Color(.systemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+        }
+        .buttonStyle(.plain)
+    }
     
     /// Card showing vocabulary statistics.
     private var statsCard: some View {
@@ -68,11 +182,21 @@ struct StudyView: View {
                 Text("Your Progress")
                     .font(.headline)
                 Spacer()
+                
+                // Learning only toggle - filters out mastered words
+                Toggle(isOn: $learningOnly) {
+                    Text("Learning only")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .toggleStyle(.switch)
+                .scaleEffect(0.85)
+                .fixedSize()
             }
             
             HStack(spacing: 24) {
                 VStack {
-                    Text("\(vocabViewModel.totalWordCount)")
+                    Text("\(availableWords.count)")
                         .font(.system(size: 36, weight: .bold, design: .rounded))
                         .foregroundStyle(.blue)
                     Text("Total Words")
@@ -84,7 +208,7 @@ struct StudyView: View {
                     .frame(height: 50)
                 
                 VStack {
-                    Text("\(vocabViewModel.masteredCount)")
+                    Text("\(masteredCount)")
                         .font(.system(size: 36, weight: .bold, design: .rounded))
                         .foregroundStyle(.green)
                     Text("Mastered")
@@ -96,7 +220,7 @@ struct StudyView: View {
                     .frame(height: 50)
                 
                 VStack {
-                    Text("\(vocabViewModel.learningWords.count)")
+                    Text("\(learningCount)")
                         .font(.system(size: 36, weight: .bold, design: .rounded))
                         .foregroundStyle(.orange)
                     Text("Learning")
@@ -106,8 +230,8 @@ struct StudyView: View {
             }
             
             // Progress bar
-            if vocabViewModel.totalWordCount > 0 {
-                let progress = Double(vocabViewModel.masteredCount) / Double(vocabViewModel.totalWordCount)
+            if availableWords.count > 0 {
+                let progress = Double(masteredCount) / Double(availableWords.count)
                 VStack(alignment: .leading, spacing: 4) {
                     ProgressView(value: progress)
                         .tint(.green)
@@ -133,39 +257,45 @@ struct StudyView: View {
             StudyModeCard(
                 icon: "rectangle.on.rectangle.angled",
                 title: "Flashcards",
-                description: "Review words with flip cards",
+                description: "Review words with flip cards. Swipe right to mark as mastered.",
                 color: .blue,
+                wordCount: studyableWords.count,
                 isDisabled: !hasEnoughWords
             ) {
+                logger.info("📚 Launching flashcards for \(selectedSource.displayName)")
                 showingFlashcards = true
             }
             
-            // Quiz
+            // Multiple Choice Quiz
             StudyModeCard(
-                icon: "questionmark.circle",
-                title: "Quiz",
-                description: "Test your knowledge",
+                icon: "list.bullet.circle",
+                title: "Multiple Choice",
+                description: "Choose the correct definition from 4 options.",
                 color: .purple,
-                isDisabled: !hasEnoughWords
+                wordCount: availableWords.count,
+                isDisabled: !hasEnoughForQuiz
             ) {
-                showingQuiz = true
+                logger.info("📚 Launching multiple choice quiz for \(selectedSource.displayName)")
+                showingMultipleChoice = true
             }
             
-            // Spell Check (placeholder)
+            // Fill in the Blank Quiz
             StudyModeCard(
-                icon: "textformat.abc",
-                title: "Spell Check",
-                description: "Coming soon",
+                icon: "pencil.line",
+                title: "Fill in the Blank",
+                description: "Type the word that matches the definition.",
                 color: .orange,
-                isDisabled: true
+                wordCount: availableWords.count,
+                isDisabled: !hasEnoughForQuiz
             ) {
-                // TODO: Implement spell check mode
+                logger.info("📚 Launching fill-in-blank quiz for \(selectedSource.displayName)")
+                showingFillInBlank = true
             }
         }
     }
     
-    /// Quick action buttons.
-    private var quickActionsSection: some View {
+    /// Quick review section with shortcuts.
+    private var quickReviewSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Quick Actions")
                 .font(.headline)
@@ -174,22 +304,131 @@ struct StudyView: View {
                 QuickActionButton(
                     icon: "arrow.clockwise",
                     title: "Review All",
+                    subtitle: "\(availableWords.count) words",
                     color: .blue,
-                    isDisabled: !hasEnoughWords
+                    isDisabled: availableWords.isEmpty
                 ) {
+                    learningOnly = false
                     showingFlashcards = true
                 }
                 
                 QuickActionButton(
                     icon: "star.fill",
-                    title: "Review Learning",
+                    title: "Learning Only",
+                    subtitle: "\(learningCount) words",
                     color: .orange,
-                    isDisabled: !hasEnoughWords
+                    isDisabled: learningCount == 0
                 ) {
+                    learningOnly = true
                     showingFlashcards = true
                 }
             }
         }
+    }
+}
+
+// MARK: - Source Selection Sheet
+
+/// Sheet for selecting which book's words to study.
+struct SourceSelectionSheet: View {
+    
+    @Environment(\.dismiss) private var dismiss
+    @Binding var selectedSource: StudySource
+    let vocabViewModel: VocabViewModel
+    let booksViewModel: BooksViewModel
+    
+    var body: some View {
+        NavigationStack {
+            List {
+                // All Words option
+                Section {
+                    SourceRow(
+                        source: .allWords,
+                        wordCount: vocabViewModel.totalWordCount,
+                        masteredCount: vocabViewModel.masteredCount,
+                        isSelected: selectedSource == .allWords
+                    ) {
+                        selectedSource = .allWords
+                        dismiss()
+                    }
+                }
+                
+                // Books section
+                Section("By Book") {
+                    if booksViewModel.books.isEmpty {
+                        Text("No books added yet")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(booksViewModel.books) { book in
+                            let words = vocabViewModel.fetchWords(forBook: book.id)
+                            let mastered = words.filter { $0.mastered }.count
+                            
+                            SourceRow(
+                                source: .book(book),
+                                wordCount: words.count,
+                                masteredCount: mastered,
+                                isSelected: selectedSource == .book(book)
+                            ) {
+                                selectedSource = .book(book)
+                                dismiss()
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Select Words to Study")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Source Row
+
+/// A row in the source selection list.
+struct SourceRow: View {
+    let source: StudySource
+    let wordCount: Int
+    let masteredCount: Int
+    let isSelected: Bool
+    let onSelect: () -> Void
+    
+    var body: some View {
+        Button {
+            onSelect()
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(source.displayName)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    
+                    HStack(spacing: 12) {
+                        Label("\(wordCount) words", systemImage: "textformat.abc")
+                        Label("\(masteredCount) mastered", systemImage: "checkmark.circle")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                
+                Spacer()
+                
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.blue)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(wordCount == 0)
+        .opacity(wordCount == 0 ? 0.5 : 1)
     }
 }
 
@@ -201,6 +440,7 @@ struct StudyModeCard: View {
     let title: String
     let description: String
     let color: Color
+    let wordCount: Int
     let isDisabled: Bool
     let action: () -> Void
     
@@ -215,13 +455,22 @@ struct StudyModeCard: View {
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.headline)
-                        .foregroundStyle(isDisabled ? .gray : .primary)
+                    HStack {
+                        Text(title)
+                            .font(.headline)
+                            .foregroundStyle(isDisabled ? .gray : .primary)
+                        
+                        if isDisabled {
+                            Text("(\(wordCount) words)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                     
                     Text(description)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .lineLimit(2)
                 }
                 
                 Spacer()
@@ -245,6 +494,7 @@ struct StudyModeCard: View {
 struct QuickActionButton: View {
     let icon: String
     let title: String
+    let subtitle: String
     let color: Color
     let isDisabled: Bool
     let action: () -> Void
@@ -260,6 +510,10 @@ struct QuickActionButton: View {
                     .font(.caption)
                     .fontWeight(.medium)
                     .foregroundStyle(isDisabled ? .gray : .primary)
+                
+                Text(subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity)
             .padding()
@@ -272,119 +526,10 @@ struct QuickActionButton: View {
     }
 }
 
-// MARK: - Flashcards Placeholder View
-
-/// Placeholder view for flashcards functionality.
-struct FlashcardsPlaceholderView: View {
-    
-    @Environment(\.dismiss) private var dismiss
-    
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 24) {
-                Image(systemName: "rectangle.on.rectangle.angled")
-                    .font(.system(size: 64))
-                    .foregroundStyle(.blue)
-                
-                Text("Flashcards")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                
-                Text("Flashcard study mode coming soon!")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                
-                // Placeholder card
-                VStack(spacing: 16) {
-                    Text("Example Word")
-                        .font(.title)
-                        .fontWeight(.semibold)
-                    
-                    Text("Tap to flip")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 200)
-                .background(Color(.systemGray6))
-                .clipShape(RoundedRectangle(cornerRadius: 20))
-                .padding(.horizontal)
-            }
-            .padding()
-            .navigationTitle("Flashcards")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Quiz Placeholder View
-
-/// Placeholder view for quiz functionality.
-struct QuizPlaceholderView: View {
-    
-    @Environment(\.dismiss) private var dismiss
-    
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 24) {
-                Image(systemName: "questionmark.circle")
-                    .font(.system(size: 64))
-                    .foregroundStyle(.purple)
-                
-                Text("Quiz Mode")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                
-                Text("Quiz functionality coming soon!")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                
-                // Placeholder quiz card
-                VStack(spacing: 16) {
-                    Text("What does this word mean?")
-                        .font(.headline)
-                    
-                    Text("?")
-                        .font(.system(size: 48))
-                        .foregroundStyle(.purple)
-                    
-                    Text("Multiple choice options")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 200)
-                .background(Color(.systemGray6))
-                .clipShape(RoundedRectangle(cornerRadius: 20))
-                .padding(.horizontal)
-            }
-            .padding()
-            .navigationTitle("Quiz")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
-            }
-        }
-    }
-}
-
 // MARK: - Preview
 
 #Preview {
     StudyView()
         .environmentObject(VocabViewModel())
+        .environmentObject(BooksViewModel())
 }
-

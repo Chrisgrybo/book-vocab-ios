@@ -34,6 +34,8 @@
 		VW006 /* AddVocabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC017 /* AddVocabView.swift */; };
 		VW007 /* AllVocabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC018 /* AllVocabView.swift */; };
 		VW008 /* StudyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC019 /* StudyView.swift */; };
+		VW009 /* FlashcardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC023 /* FlashcardView.swift */; };
+		VW010 /* QuizView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC024 /* QuizView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -59,6 +61,8 @@
 		SRC017 /* AddVocabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddVocabView.swift; sourceTree = "<group>"; };
 		SRC018 /* AllVocabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllVocabView.swift; sourceTree = "<group>"; };
 		SRC019 /* StudyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudyView.swift; sourceTree = "<group>"; };
+		SRC023 /* FlashcardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlashcardView.swift; sourceTree = "<group>"; };
+		SRC024 /* QuizView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuizView.swift; sourceTree = "<group>"; };
 		SRC020 /* UserSessionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserSessionViewModel.swift; sourceTree = "<group>"; };
 		SRC021 /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		SRC022 /* Secrets.example.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.example.swift; sourceTree = "<group>"; };
@@ -193,6 +197,8 @@
 			isa = PBXGroup;
 			children = (
 				SRC019 /* StudyView.swift */,
+				SRC023 /* FlashcardView.swift */,
+				SRC024 /* QuizView.swift */,
 			);
 			path = Study;
 			sourceTree = "<group>";
@@ -299,6 +305,8 @@
 				VW006 /* AddVocabView.swift in Sources */,
 				VW007 /* AllVocabView.swift in Sources */,
 				VW008 /* StudyView.swift in Sources */,
+				VW009 /* FlashcardView.swift in Sources */,
+				VW010 /* QuizView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
