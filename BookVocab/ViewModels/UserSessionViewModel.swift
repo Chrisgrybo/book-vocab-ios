@@ -12,6 +12,7 @@
 import Foundation
 import SwiftUI
 import Auth
+import Supabase
 
 /// ViewModel responsible for managing user authentication and session state.
 ///
