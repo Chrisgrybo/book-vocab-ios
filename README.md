@@ -43,7 +43,9 @@ BookVocab/
 │   │   ├── AddVocabView.swift   # Add word with dictionary lookup
 │   │   └── AllVocabView.swift   # All words list
 │   └── Study/
-│       └── StudyView.swift      # Study section (placeholder)
+│       ├── StudyView.swift      # Study hub with mode selection
+│       ├── FlashcardView.swift  # Flashcard study mode
+│       └── QuizView.swift       # Quiz modes (MC & fill-in)
 └── Services/                     # Backend services
     ├── SupabaseService.swift    # Supabase auth & database
     ├── DictionaryService.swift  # Free Dictionary API
@@ -72,16 +74,29 @@ BookVocab/
   - Vocabulary progress stats
   - Search/filter books
 - [x] Global vocabulary list with filtering & sorting
-- [x] Study section placeholder (flashcards & quizzes)
 - [x] Tab-based navigation
+- [x] **Flashcard Study Mode**:
+  - 3D flip animation (tap to flip)
+  - Swipe right to mark as mastered
+  - Swipe left to skip
+  - Progress tracking per session
+  - Session completion summary
+- [x] **Quiz Study Modes**:
+  - Multiple choice (pick the definition)
+  - Fill-in-the-blank (type the word)
+  - Immediate feedback on answers
+  - Score tracking and review
+- [x] **Study Source Selection**:
+  - Study all words or select a specific book
+  - "Learning only" filter (exclude mastered words)
+  - Word count and mastered count per source
 
 ### 🚧 TODO (Not Yet Implemented)
 
-- [ ] Flashcard study mode
-- [ ] Quiz study mode
 - [ ] Offline caching
 - [ ] Push notifications for study reminders
 - [ ] Sign in with Apple (removed, can re-add)
+- [ ] Freemium model with limits, ads, subscriptions
 
 ## Getting Started
 
