@@ -75,19 +75,41 @@ struct Book: Identifiable, Codable, Hashable {
 
 extension Book {
     /// Sample book for SwiftUI previews and testing.
+    /// Includes a real Google Books cover URL for testing.
     static let sample = Book(
         userId: UUID(),
         title: "The Great Gatsby",
         author: "F. Scott Fitzgerald",
-        coverImageUrl: nil
+        coverImageUrl: "https://books.google.com/books/content?id=iXn5U2IzVH0C&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
     )
     
     /// Array of sample books for list previews.
+    /// Includes a mix of books with and without covers for testing placeholder display.
     static let samples: [Book] = [
-        Book(userId: UUID(), title: "The Great Gatsby", author: "F. Scott Fitzgerald"),
-        Book(userId: UUID(), title: "To Kill a Mockingbird", author: "Harper Lee"),
-        Book(userId: UUID(), title: "1984", author: "George Orwell"),
-        Book(userId: UUID(), title: "Pride and Prejudice", author: "Jane Austen")
+        Book(
+            userId: UUID(),
+            title: "The Great Gatsby",
+            author: "F. Scott Fitzgerald",
+            coverImageUrl: "https://books.google.com/books/content?id=iXn5U2IzVH0C&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        ),
+        Book(
+            userId: UUID(),
+            title: "To Kill a Mockingbird",
+            author: "Harper Lee",
+            coverImageUrl: "https://books.google.com/books/content?id=PGR2AwAAQBAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        ),
+        Book(
+            userId: UUID(),
+            title: "1984",
+            author: "George Orwell",
+            coverImageUrl: "https://books.google.com/books/content?id=kotPYEqx7kMC&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        ),
+        Book(
+            userId: UUID(),
+            title: "Pride and Prejudice",
+            author: "Jane Austen",
+            coverImageUrl: nil // Test placeholder display
+        )
     ]
 }
 

@@ -7,8 +7,17 @@
 //
 //  API Documentation: https://developers.google.com/books/docs/v1/using
 //
+//  DEBUG LOGGING: This service includes detailed logging for cover image
+//  fetching to help diagnose issues with book covers not displaying.
+//
 
 import Foundation
+import os.log
+
+// MARK: - Logger
+
+/// Logger for BookSearchService debugging
+private let logger = Logger(subsystem: "com.bookvocab.app", category: "BookSearchService")
 
 // MARK: - Google Books API Response Models
 
@@ -35,9 +44,32 @@ struct VolumeInfo: Codable {
 }
 
 /// Image URLs for book covers.
+/// Note: Google Books API provides multiple image sizes.
+/// - thumbnail: ~128px wide (preferred)
+/// - smallThumbnail: ~80px wide (fallback)
 struct ImageLinks: Codable {
     let smallThumbnail: String?
     let thumbnail: String?
+    
+    /// Returns the best available cover URL, preferring thumbnail over smallThumbnail.
+    /// Automatically converts HTTP to HTTPS for security.
+    var bestAvailableUrl: String? {
+        // Prefer thumbnail, fallback to smallThumbnail
+        let rawUrl = thumbnail ?? smallThumbnail
+        
+        guard let url = rawUrl else {
+            logger.debug("📚 ImageLinks: No cover URLs available")
+            return nil
+        }
+        
+        // Convert HTTP to HTTPS for security (Google Books sometimes returns http)
+        let secureUrl = url.hasPrefix("http://") 
+            ? url.replacingOccurrences(of: "http://", with: "https://")
+            : url
+        
+        logger.debug("📚 ImageLinks: Best URL = \(secureUrl)")
+        return secureUrl
+    }
 }
 
 /// ISBN and other identifiers.
@@ -124,6 +156,7 @@ class BookSearchService {
     /// 1. URL-encodes the search query
     /// 2. Calls Google Books API with `intitle:` prefix for title search
     /// 3. Parses results into BookSearchResult array
+    /// 4. Logs detailed debug info for cover image fetching
     ///
     /// - Parameter query: The search query (book title)
     /// - Returns: Array of BookSearchResult objects (up to 10 results)
@@ -132,16 +165,22 @@ class BookSearchService {
         // Clean and encode the query
         let cleanedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanedQuery.isEmpty else {
+            logger.warning("📚 Search: Empty query provided")
             throw BookSearchError.noResults
         }
+        
+        logger.info("📚 Search: Starting search for '\(cleanedQuery)'")
         
         // Build the search URL with intitle: prefix for better title matching
         // Also request only 10 results to keep response fast
         let searchQuery = "intitle:\(cleanedQuery)"
         guard let encodedQuery = searchQuery.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
               let url = URL(string: "\(baseUrl)?q=\(encodedQuery)&maxResults=10") else {
+            logger.error("📚 Search: Failed to build URL for query '\(cleanedQuery)'")
             throw BookSearchError.invalidURL
         }
+        
+        logger.debug("📚 Search: Request URL = \(url.absoluteString)")
         
         // Make the network request
         let data: Data
@@ -150,15 +189,25 @@ class BookSearchService {
         do {
             (data, response) = try await session.data(from: url)
         } catch {
+            logger.error("📚 Search: Network error - \(error.localizedDescription)")
             throw BookSearchError.networkError(error)
         }
         
         // Check HTTP status
-        if let httpResponse = response as? HTTPURLResponse,
-           !(200...299).contains(httpResponse.statusCode) {
-            throw BookSearchError.networkError(
-                NSError(domain: "HTTP", code: httpResponse.statusCode)
-            )
+        if let httpResponse = response as? HTTPURLResponse {
+            logger.debug("📚 Search: HTTP status = \(httpResponse.statusCode)")
+            if !(200...299).contains(httpResponse.statusCode) {
+                logger.error("📚 Search: HTTP error \(httpResponse.statusCode)")
+                throw BookSearchError.networkError(
+                    NSError(domain: "HTTP", code: httpResponse.statusCode)
+                )
+            }
+        }
+        
+        // DEBUG: Log raw JSON response (truncated for readability)
+        if let jsonString = String(data: data, encoding: .utf8) {
+            let truncated = String(jsonString.prefix(500))
+            logger.debug("📚 Search: Raw response (first 500 chars) = \(truncated)")
         }
         
         // Decode the response
@@ -166,24 +215,39 @@ class BookSearchService {
         do {
             googleResponse = try JSONDecoder().decode(GoogleBooksResponse.self, from: data)
         } catch {
+            logger.error("📚 Search: Decoding error - \(error.localizedDescription)")
             throw BookSearchError.decodingError(error)
         }
         
+        logger.info("📚 Search: Found \(googleResponse.totalItems) total items")
+        
         // Check if we have results
         guard let items = googleResponse.items, !items.isEmpty else {
+            logger.warning("📚 Search: No results for '\(cleanedQuery)'")
             throw BookSearchError.noResults
         }
         
+        logger.info("📚 Search: Processing \(items.count) items")
+        
         // Transform to our app's BookSearchResult model
-        return items.map { item in
-            // Get the best available cover URL (prefer thumbnail over smallThumbnail)
-            // Also convert http to https for security
-            var coverUrl = item.volumeInfo.imageLinks?.thumbnail
-                ?? item.volumeInfo.imageLinks?.smallThumbnail
+        return items.enumerated().map { index, item in
+            // DEBUG: Log imageLinks for each result
+            logger.debug("📚 Result[\(index)]: '\(item.volumeInfo.title)'")
             
-            // Google Books sometimes returns http URLs, convert to https
-            if let url = coverUrl, url.hasPrefix("http://") {
-                coverUrl = url.replacingOccurrences(of: "http://", with: "https://")
+            if let imageLinks = item.volumeInfo.imageLinks {
+                logger.debug("  - thumbnail: \(imageLinks.thumbnail ?? "nil")")
+                logger.debug("  - smallThumbnail: \(imageLinks.smallThumbnail ?? "nil")")
+            } else {
+                logger.debug("  - imageLinks: nil (no cover available)")
+            }
+            
+            // Use the bestAvailableUrl helper for HTTPS-safe cover URL
+            let coverUrl = item.volumeInfo.imageLinks?.bestAvailableUrl
+            
+            if let url = coverUrl {
+                logger.info("📚 Result[\(index)]: Cover URL = \(url)")
+            } else {
+                logger.warning("📚 Result[\(index)]: No cover available for '\(item.volumeInfo.title)'")
             }
             
             // Get ISBN if available (prefer ISBN_13 over ISBN_10)
@@ -205,17 +269,34 @@ class BookSearchService {
     /// Fetches the cover image URL for a book by title.
     ///
     /// This is a convenience method that searches for the book and returns
-    /// just the cover URL from the first result.
+    /// just the cover URL from the first result that has one.
+    ///
+    /// Fallback behavior:
+    /// 1. Searches all results for the first one with a cover
+    /// 2. Prefers thumbnail over smallThumbnail
+    /// 3. Ensures HTTPS URLs
     ///
     /// - Parameter query: The book title to search for
     /// - Returns: URL string for the cover image, or nil if not found
     func fetchCoverImageUrl(for query: String) async -> String? {
+        logger.info("📚 FetchCover: Looking for cover for '\(query)'")
+        
         do {
             let results = try await searchBooks(query: query)
-            // Return the first result that has a cover image
-            return results.first(where: { $0.coverImageUrl != nil })?.coverImageUrl
+            
+            // Find the first result that has a cover image
+            if let resultWithCover = results.first(where: { $0.coverImageUrl != nil }) {
+                logger.info("📚 FetchCover: Found cover for '\(query)' from '\(resultWithCover.title)'")
+                logger.debug("📚 FetchCover: URL = \(resultWithCover.coverImageUrl ?? "nil")")
+                return resultWithCover.coverImageUrl
+            } else {
+                // No results have covers - log this for debugging
+                logger.warning("📚 FetchCover: No covers found in \(results.count) results for '\(query)'")
+                return nil
+            }
         } catch {
-            // Return nil if search fails - cover is optional
+            // Log the error but return nil since cover is optional
+            logger.error("📚 FetchCover: Search failed for '\(query)' - \(error.localizedDescription)")
             return nil
         }
     }
@@ -225,10 +306,18 @@ class BookSearchService {
     /// - Parameter query: The book title to search for
     /// - Returns: The best matching BookSearchResult, or nil if not found
     func findBook(query: String) async -> BookSearchResult? {
+        logger.info("📚 FindBook: Looking for '\(query)'")
         do {
             let results = try await searchBooks(query: query)
-            return results.first
+            if let first = results.first {
+                logger.info("📚 FindBook: Found '\(first.title)' by \(first.author)")
+                logger.debug("📚 FindBook: Cover URL = \(first.coverImageUrl ?? "nil")")
+                return first
+            }
+            logger.warning("📚 FindBook: No results for '\(query)'")
+            return nil
         } catch {
+            logger.error("📚 FindBook: Error searching for '\(query)' - \(error.localizedDescription)")
             return nil
         }
     }
@@ -240,11 +329,38 @@ class BookSearchService {
     ///   - userId: The user's ID to associate with the book
     /// - Returns: A Book model ready to be saved
     func convertToBook(_ result: BookSearchResult, userId: UUID) -> Book {
+        logger.debug("📚 ConvertToBook: Creating Book from '\(result.title)'")
+        logger.debug("📚 ConvertToBook: Cover URL = \(result.coverImageUrl ?? "nil")")
+        
         return Book(
             userId: userId,
             title: result.title,
             author: result.author,
             coverImageUrl: result.coverImageUrl
         )
+    }
+    
+    // MARK: - Test Methods
+    
+    /// Tests the book cover fetching with known books.
+    /// Call this method to verify covers are being fetched correctly.
+    ///
+    /// Usage in debug: `await BookSearchService.shared.testCoverFetching()`
+    func testCoverFetching() async {
+        let testBooks = ["The Great Gatsby", "1984", "To Kill a Mockingbird", "Pride and Prejudice"]
+        
+        logger.info("📚 TEST: Starting cover fetch test for \(testBooks.count) books")
+        
+        for title in testBooks {
+            logger.info("📚 TEST: Testing '\(title)'...")
+            
+            if let coverUrl = await fetchCoverImageUrl(for: title) {
+                logger.info("✅ TEST: '\(title)' - Cover found: \(coverUrl)")
+            } else {
+                logger.error("❌ TEST: '\(title)' - No cover found!")
+            }
+        }
+        
+        logger.info("📚 TEST: Cover fetch test complete")
     }
 }

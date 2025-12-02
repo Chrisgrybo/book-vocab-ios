@@ -5,8 +5,17 @@
 //  Main home screen displaying the user's book collection.
 //  Shows book covers, word counts, and provides navigation to book details.
 //
+//  Cover Display Logic:
+//  - Uses AsyncImage to load covers from URLs
+//  - Falls back to placeholder if URL is nil, empty, or fails to load
+//  - All URLs should be HTTPS (converted by BookSearchService)
+//
 
 import SwiftUI
+import os.log
+
+/// Logger for HomeView debugging
+private let logger = Logger(subsystem: "com.bookvocab.app", category: "HomeView")
 
 /// The home screen showing a list of the user's books.
 ///
@@ -357,18 +366,28 @@ struct BookCard: View {
     }
     
     /// Book cover image or placeholder.
+    /// Uses AsyncImage to load covers from URLs with proper fallback handling.
     private var bookCoverView: some View {
         Group {
-            if let coverUrl = book.coverImageUrl, !coverUrl.isEmpty {
+            if let coverUrl = book.coverImageUrl, !coverUrl.isEmpty, let url = URL(string: coverUrl) {
                 // Load cover image from URL
-                AsyncImage(url: URL(string: coverUrl)) { phase in
+                AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                    case .failure:
+                            .onAppear {
+                                // Log successful cover load
+                                logger.debug("🖼️ Cover loaded: '\(book.title)'")
+                            }
+                    case .failure(let error):
                         coverPlaceholder
+                            .onAppear {
+                                // Log cover load failure for debugging
+                                logger.error("🖼️ Cover FAILED for '\(book.title)': \(error.localizedDescription)")
+                                logger.debug("🖼️ Failed URL: \(coverUrl)")
+                            }
                     case .empty:
                         coverPlaceholder
                             .overlay {
@@ -380,7 +399,17 @@ struct BookCard: View {
                     }
                 }
             } else {
+                // No cover URL available
                 coverPlaceholder
+                    .onAppear {
+                        if book.coverImageUrl == nil {
+                            logger.debug("🖼️ No cover URL for '\(book.title)' (nil)")
+                        } else if book.coverImageUrl?.isEmpty == true {
+                            logger.debug("🖼️ No cover URL for '\(book.title)' (empty string)")
+                        } else {
+                            logger.warning("🖼️ Invalid cover URL for '\(book.title)': \(book.coverImageUrl ?? "unknown")")
+                        }
+                    }
             }
         }
         .frame(width: 60, height: 85)

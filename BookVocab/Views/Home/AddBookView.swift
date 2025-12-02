@@ -5,8 +5,14 @@
 //  Screen for adding a new book to the collection.
 //  Automatically fetches book covers from Google Books API.
 //
+//  DEBUG: Includes logging for cover image fetching to diagnose display issues.
+//
 
 import SwiftUI
+import os.log
+
+/// Logger for AddBookView debugging
+private let logger = Logger(subsystem: "com.bookvocab.app", category: "AddBookView")
 
 /// View for adding a new book to the user's collection.
 /// Supports search-based book addition with automatic cover fetching.
@@ -378,24 +384,42 @@ struct AddBookView: View {
     
     /// Selects a book from search results.
     private func selectSearchResult(_ result: BookSearchResult) {
+        logger.info("📖 Selected: '\(result.title)' by \(result.author)")
+        
         title = result.title
         author = result.author
-        coverImageUrl = result.coverImageUrl ?? ""
+        
+        // Set cover URL, ensuring it's not nil
+        if let url = result.coverImageUrl, !url.isEmpty {
+            coverImageUrl = url
+            logger.info("📖 Cover URL set: \(url)")
+        } else {
+            coverImageUrl = ""
+            logger.warning("📖 No cover URL available for '\(result.title)'")
+        }
     }
     
     /// Fetches cover image for manual entry mode.
     private func fetchCoverForManualEntry() async {
         guard !title.isEmpty else { return }
         
+        logger.info("📖 Manual entry: Fetching cover for '\(title)'")
         isFetchingCover = true
         
-        // Try to find a cover using the title
+        // Try to find a cover using the title (and author if available)
         let searchTerm = author.isEmpty ? title : "\(title) \(author)"
+        logger.debug("📖 Manual entry: Search term = '\(searchTerm)'")
+        
         if let coverUrl = await BookSearchService.shared.fetchCoverImageUrl(for: searchTerm) {
             // Only update if user hasn't entered a URL manually
             if coverImageUrl.isEmpty {
                 coverImageUrl = coverUrl
+                logger.info("📖 Manual entry: Cover found and set: \(coverUrl)")
+            } else {
+                logger.debug("📖 Manual entry: User already has a cover URL, not overwriting")
             }
+        } else {
+            logger.warning("📖 Manual entry: No cover found for '\(searchTerm)'")
         }
         
         isFetchingCover = false
@@ -406,6 +430,14 @@ struct AddBookView: View {
         // Get the user ID from the current Supabase session
         let userId = session.currentUser?.id ?? UUID()
         
+        // Log the book being saved with cover info
+        logger.info("📖 Saving book: '\(title)' by \(author)")
+        if coverImageUrl.isEmpty {
+            logger.warning("📖 Saving WITHOUT cover image")
+        } else {
+            logger.info("📖 Saving WITH cover: \(coverImageUrl)")
+        }
+        
         Task {
             await booksViewModel.addBook(
                 title: title.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -413,6 +445,7 @@ struct AddBookView: View {
                 coverImageUrl: coverImageUrl.isEmpty ? nil : coverImageUrl,
                 userId: userId
             )
+            logger.info("📖 Book saved successfully")
             dismiss()
         }
     }
