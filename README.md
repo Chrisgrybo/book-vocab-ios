@@ -18,60 +18,70 @@ This app follows the **MVVM (Model-View-ViewModel)** architecture pattern:
 
 ```
 BookVocab/
-├── BookVocabApp.swift          # App entry point
-├── Models/                      # Data models
-│   ├── Book.swift              # Book model
-│   ├── VocabWord.swift         # Vocabulary word model
-│   └── User.swift              # User model
-├── ViewModels/                  # View models (business logic)
-│   ├── AuthViewModel.swift     # Authentication logic
-│   ├── BooksViewModel.swift    # Book management
-│   ├── VocabViewModel.swift    # Vocabulary management
-│   └── StudyViewModel.swift    # Study session logic
-├── Views/                       # SwiftUI views
-│   ├── MainTabView.swift       # Main tab navigation
+├── BookVocabApp.swift           # App entry point
+├── Config/                       # Configuration (credentials)
+│   ├── Secrets.swift            # ⚠️ Gitignored - your credentials
+│   └── Secrets.example.swift    # Template for Secrets.swift
+├── Models/                       # Data models
+│   ├── Book.swift               # Book model
+│   ├── VocabWord.swift          # Vocabulary word model
+│   └── User.swift               # User model
+├── ViewModels/                   # View models (business logic)
+│   ├── UserSessionViewModel.swift # Authentication & session
+│   ├── BooksViewModel.swift     # Book management
+│   ├── VocabViewModel.swift     # Vocabulary management
+│   └── StudyViewModel.swift     # Study session logic
+├── Views/                        # SwiftUI views
+│   ├── MainTabView.swift        # Main tab navigation
 │   ├── Auth/
-│   │   └── LoginView.swift     # Login/Signup screen
+│   │   └── LoginView.swift      # Login/Signup screen
 │   ├── Home/
-│   │   ├── HomeView.swift      # Book list
-│   │   ├── AddBookView.swift   # Add new book
+│   │   ├── HomeView.swift       # Book list with covers & stats
+│   │   ├── AddBookView.swift    # Add book with cover search
 │   │   └── BookDetailView.swift # Book details & vocab
 │   ├── Vocab/
-│   │   ├── AddVocabView.swift  # Add vocabulary word
-│   │   └── AllVocabView.swift  # All words list
+│   │   ├── AddVocabView.swift   # Add word with dictionary lookup
+│   │   └── AllVocabView.swift   # All words list
 │   └── Study/
-│       └── StudyView.swift     # Study section
-└── Services/                    # Backend services (scaffolded)
-    ├── SupabaseService.swift   # Supabase integration
-    ├── DictionaryService.swift # Dictionary API
-    └── BookSearchService.swift # Book search API
+│       └── StudyView.swift      # Study section (placeholder)
+└── Services/                     # Backend services
+    ├── SupabaseService.swift    # Supabase auth & database
+    ├── DictionaryService.swift  # Free Dictionary API
+    └── BookSearchService.swift  # Google Books API
 ```
 
 ## Features
 
-### Current (Scaffolded)
+### ✅ Implemented
 
-- [x] User authentication flow (Login/Signup)
-- [x] Book collection management
+- [x] User authentication flow (Login/Signup with email/password)
+- [x] Supabase authentication integration
+- [x] Supabase database operations (books, vocab words)
+- [x] Secure configuration system (`Secrets.swift` gitignored)
+- [x] Book collection management with cover images
+- [x] **Google Books API integration** - Auto-fetch book covers
+- [x] **Free Dictionary API integration** - Auto-fetch definitions, synonyms, antonyms, examples
 - [x] Vocabulary word tracking with:
   - Definitions
   - Synonyms & Antonyms
   - Example sentences
   - Mastery tracking
+- [x] Enhanced HomeView with:
+  - Book covers (thumbnails)
+  - Word count per book
+  - Vocabulary progress stats
+  - Search/filter books
 - [x] Global vocabulary list with filtering & sorting
 - [x] Study section placeholder (flashcards & quizzes)
 - [x] Tab-based navigation
 
-### TODO (Not Yet Implemented)
+### 🚧 TODO (Not Yet Implemented)
 
-- [ ] Supabase authentication integration
-- [ ] Supabase database operations
-- [ ] Dictionary API integration (definitions, synonyms, etc.)
-- [ ] Book search API integration (Google Books, Open Library)
 - [ ] Flashcard study mode
 - [ ] Quiz study mode
 - [ ] Offline caching
 - [ ] Push notifications for study reminders
+- [ ] Sign in with Apple (removed, can re-add)
 
 ## Getting Started
 
@@ -92,14 +102,19 @@ BookVocab/
 
 ## Configuration
 
-### Supabase Setup (Future)
+### Supabase Setup
 
 1. Create a Supabase project at [supabase.com](https://supabase.com)
-2. Update credentials in `SupabaseService.swift`:
+2. Copy `BookVocab/Config/Secrets.example.swift` to `BookVocab/Config/Secrets.swift`
+3. Update with your credentials:
    ```swift
-   private let supabaseUrl = "https://your-project.supabase.co"
-   private let supabaseKey = "your-anon-key"
+   enum Secrets {
+       static let supabaseUrl = "https://your-project.supabase.co"
+       static let supabaseKey = "your-anon-key"
+   }
    ```
+
+> ⚠️ **Important:** `Secrets.swift` is gitignored and should never be committed. Each developer must create their own copy.
 
 ### Database Schema (Supabase)
 
@@ -134,10 +149,12 @@ ALTER TABLE vocab_words ENABLE ROW LEVEL SECURITY;
 
 ## Dependencies
 
-Currently no external dependencies. Future integrations will require:
+- **[Supabase Swift SDK](https://github.com/supabase/supabase-swift)** - Authentication & database
 
-- **Supabase Swift SDK** - For backend services
-- Potentially additional packages for animations or UI components
+### External APIs (No SDK Required)
+
+- **[Free Dictionary API](https://dictionaryapi.dev/)** - Word definitions, synonyms, antonyms
+- **[Google Books API](https://developers.google.com/books)** - Book search & cover images
 
 ## Contributing
 
