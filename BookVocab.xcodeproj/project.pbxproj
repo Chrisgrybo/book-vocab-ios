@@ -37,7 +37,6 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		0615CFBB2EDF7839003F1843 /* BookVocab.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BookVocab.entitlements; sourceTree = "<group>"; };
 		PRD001 /* BookVocab.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BookVocab.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		RES001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		RES002 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
@@ -82,7 +81,6 @@
 		GRP001 /* BookVocab */ = {
 			isa = PBXGroup;
 			children = (
-				0615CFBB2EDF7839003F1843 /* BookVocab.entitlements */,
 				SRC001 /* BookVocabApp.swift */,
 				GRP012 /* Config */,
 				GRP003 /* Models */,
@@ -431,7 +429,6 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = BookVocab/BookVocab.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"BookVocab/Preview Content\"";
@@ -460,7 +457,6 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = BookVocab/BookVocab.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"BookVocab/Preview Content\"";

@@ -152,15 +152,17 @@ struct LoginView: View {
                 .autocorrectionDisabled()
             
             // Password field with secure entry
+            // NOTE: .textContentType(.none) disables AutoFill for testing
             SecureField("Password", text: $password)
                 .textFieldStyle(.roundedBorder)
-                .textContentType(isSignUpMode ? .newPassword : .password)
+                .textContentType(.none)
             
             // Confirm password field (only shown in signup mode)
             if isSignUpMode {
+                // NOTE: .textContentType(.none) disables AutoFill for testing
                 SecureField("Confirm Password", text: $confirmPassword)
                     .textFieldStyle(.roundedBorder)
-                    .textContentType(.newPassword)
+                    .textContentType(.none)
             }
         }
     }
