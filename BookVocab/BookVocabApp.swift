@@ -10,6 +10,7 @@
 //  - UserSessionViewModel manages authentication state
 //  - Environment objects share state across the view hierarchy
 //  - Supabase provides backend authentication and database
+//  - Core Data provides offline caching
 //
 
 import SwiftUI
@@ -18,6 +19,7 @@ import SwiftUI
 ///
 /// This struct:
 /// - Creates and owns the shared ViewModels as @StateObject
+/// - Initializes offline caching services
 /// - Determines which view to show based on authentication state
 /// - Injects ViewModels into the environment for child views
 @main
@@ -31,12 +33,23 @@ struct BookVocabApp: App {
     @StateObject private var session = UserSessionViewModel()
     
     /// Shared books view model for managing the user's book collection.
-    /// Will be used once we implement database functionality.
     @StateObject private var booksViewModel = BooksViewModel()
     
     /// Shared vocab view model for managing vocabulary words.
-    /// Will be used once we implement database functionality.
     @StateObject private var vocabViewModel = VocabViewModel()
+    
+    /// Network monitor for tracking online/offline status.
+    @StateObject private var networkMonitor = NetworkMonitor.shared
+    
+    /// Sync service for managing data synchronization.
+    @StateObject private var syncService = SyncService.shared
+    
+    // MARK: - Initialization
+    
+    init() {
+        // Initialize persistence controller to set up Core Data stack
+        _ = PersistenceController.shared
+    }
     
     // MARK: - Body
     
@@ -51,6 +64,14 @@ struct BookVocabApp: App {
                         .environmentObject(session)
                         .environmentObject(booksViewModel)
                         .environmentObject(vocabViewModel)
+                        .environmentObject(networkMonitor)
+                        .environmentObject(syncService)
+                        .onAppear {
+                            // Set user ID for fetching user-specific data
+                            if let userId = session.currentUser?.id {
+                                booksViewModel.setUserId(userId)
+                            }
+                        }
                 } else {
                     // User is not logged in - show login screen
                     LoginView()
@@ -74,6 +95,41 @@ struct BookVocabApp: App {
                     .ignoresSafeArea()
                 }
             }
+            // Show offline banner when not connected
+            .overlay(alignment: .top) {
+                if !networkMonitor.isConnected {
+                    OfflineBanner()
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+            .animation(.easeInOut, value: networkMonitor.isConnected)
         }
+    }
+}
+
+// MARK: - Offline Banner
+
+/// A banner displayed when the app is offline.
+struct OfflineBanner: View {
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "wifi.slash")
+                .font(.caption)
+            
+            Text("Offline Mode")
+                .font(.caption)
+                .fontWeight(.medium)
+            
+            Text("Changes will sync when online")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(Color.orange.opacity(0.9))
+        .foregroundStyle(.white)
+        .clipShape(Capsule())
+        .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
+        .padding(.top, 50) // Account for safe area
     }
 }

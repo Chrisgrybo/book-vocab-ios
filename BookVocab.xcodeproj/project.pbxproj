@@ -19,6 +19,10 @@
 		SVC001 /* SupabaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC009 /* SupabaseService.swift */; };
 		SVC002 /* DictionaryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC010 /* DictionaryService.swift */; };
 		SVC003 /* BookSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC011 /* BookSearchService.swift */; };
+		SVC004 /* PersistenceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC025 /* PersistenceController.swift */; };
+		SVC005 /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC026 /* NetworkMonitor.swift */; };
+		SVC006 /* CacheService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC027 /* CacheService.swift */; };
+		SVC007 /* SyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC028 /* SyncService.swift */; };
 		VM001 /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC005 /* AuthViewModel.swift */; };
 		VM002 /* BooksViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC006 /* BooksViewModel.swift */; };
 		VM003 /* VocabViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC007 /* VocabViewModel.swift */; };
@@ -53,6 +57,10 @@
 		SRC009 /* SupabaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseService.swift; sourceTree = "<group>"; };
 		SRC010 /* DictionaryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictionaryService.swift; sourceTree = "<group>"; };
 		SRC011 /* BookSearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookSearchService.swift; sourceTree = "<group>"; };
+		SRC025 /* PersistenceController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistenceController.swift; sourceTree = "<group>"; };
+		SRC026 /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
+		SRC027 /* CacheService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CacheService.swift; sourceTree = "<group>"; };
+		SRC028 /* SyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncService.swift; sourceTree = "<group>"; };
 		SRC012 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		SRC013 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		SRC014 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
@@ -154,6 +162,10 @@
 				SRC009 /* SupabaseService.swift */,
 				SRC010 /* DictionaryService.swift */,
 				SRC011 /* BookSearchService.swift */,
+				SRC025 /* PersistenceController.swift */,
+				SRC026 /* NetworkMonitor.swift */,
+				SRC027 /* CacheService.swift */,
+				SRC028 /* SyncService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -297,6 +309,10 @@
 				SVC001 /* SupabaseService.swift in Sources */,
 				SVC002 /* DictionaryService.swift in Sources */,
 				SVC003 /* BookSearchService.swift in Sources */,
+				SVC004 /* PersistenceController.swift in Sources */,
+				SVC005 /* NetworkMonitor.swift in Sources */,
+				SVC006 /* CacheService.swift in Sources */,
+				SVC007 /* SyncService.swift in Sources */,
 				VW001 /* LoginView.swift in Sources */,
 				VW002 /* MainTabView.swift in Sources */,
 				VW003 /* HomeView.swift in Sources */,

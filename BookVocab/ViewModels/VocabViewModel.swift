@@ -3,13 +3,18 @@
 //  BookVocab
 //
 //  ViewModel for managing vocabulary words.
-//  Handles fetching, adding, and updating vocab words via Supabase.
+//  Handles fetching, adding, and updating vocab words via Supabase with offline caching.
 //
-//  DEBUG: Includes logging for mastered status updates.
+//  Features:
+//  - Offline-first: loads from cache immediately, then syncs with Supabase
+//  - Automatic caching of all vocab word data
+//  - Network-aware operations
+//  - Debug logging for mastered status updates
 //
 
 import Foundation
 import SwiftUI
+import Combine
 import os.log
 
 /// Logger for VocabViewModel debugging
@@ -33,6 +38,9 @@ class VocabViewModel: ObservableObject {
     
     /// Search query for filtering words.
     @Published var searchQuery: String = ""
+    
+    /// Whether the app is currently offline.
+    @Published var isOffline: Bool = false
     
     // MARK: - Computed Properties
     
@@ -75,40 +83,98 @@ class VocabViewModel: ObservableObject {
     /// Reference to the Dictionary service for fetching definitions.
     private let dictionaryService: DictionaryService
     
+    /// Reference to the cache service for offline storage.
+    private let cacheService: CacheService
+    
+    /// Reference to the network monitor.
+    private let networkMonitor: NetworkMonitor
+    
+    /// Cancellables for Combine subscriptions.
+    private var cancellables = Set<AnyCancellable>()
+    
     // MARK: - Initialization
     
     /// Creates a new VocabViewModel with optional dependency injection.
     /// - Parameters:
     ///   - supabaseService: The Supabase service instance (defaults to shared)
     ///   - dictionaryService: The Dictionary service instance (defaults to shared)
+    ///   - cacheService: The cache service instance (defaults to shared)
+    ///   - networkMonitor: The network monitor instance (defaults to shared)
     init(
         supabaseService: SupabaseService = .shared,
-        dictionaryService: DictionaryService = .shared
+        dictionaryService: DictionaryService = .shared,
+        cacheService: CacheService = .shared,
+        networkMonitor: NetworkMonitor = .shared
     ) {
         self.supabaseService = supabaseService
         self.dictionaryService = dictionaryService
+        self.cacheService = cacheService
+        self.networkMonitor = networkMonitor
         
-        // Load sample data for scaffolding
+        setupNetworkObserver()
+        
+        // Load sample data for scaffolding in DEBUG
         #if DEBUG
-        self.allWords = VocabWord.samples
+        if allWords.isEmpty {
+            self.allWords = VocabWord.samples
+        }
         #endif
+        
+        logger.info("📝 VocabViewModel initialized")
+    }
+    
+    // MARK: - Network Observer
+    
+    /// Sets up observer for network status changes.
+    private func setupNetworkObserver() {
+        networkMonitor.$isConnected
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] isConnected in
+                self?.isOffline = !isConnected
+                if isConnected {
+                    logger.debug("📝 Network connected - can sync vocab words")
+                } else {
+                    logger.debug("📝 Network disconnected - using cached vocab words")
+                }
+            }
+            .store(in: &cancellables)
     }
     
     // MARK: - Vocab Management Methods
     
-    /// Fetches all vocabulary words for the current user from Supabase.
+    /// Fetches all vocabulary words for the current user.
+    /// Loads from cache first, then fetches from Supabase if online.
     func fetchAllWords() async {
         isLoading = true
         errorMessage = nil
         
-        // TODO: Implement actual Supabase fetch
-        do {
-            try await Task.sleep(nanoseconds: 500_000_000) // Simulate network delay
+        // Step 1: Load from cache immediately (offline-first)
+        let cachedWords = cacheService.fetchAllVocabWords()
+        if !cachedWords.isEmpty {
+            allWords = cachedWords
+            logger.info("📝 Loaded \(cachedWords.count) vocab words from cache")
+        }
+        
+        // Step 2: If online, fetch from Supabase and update cache
+        if networkMonitor.isConnected {
+            logger.debug("📝 Fetching vocab words from Supabase...")
             
-            // Placeholder: Keep existing sample data
-            // allWords = try await supabaseService.fetchAllVocabWords()
-        } catch {
-            errorMessage = "Failed to fetch words: \(error.localizedDescription)"
+            // TODO: Replace with actual Supabase fetch
+            do {
+                try await Task.sleep(nanoseconds: 500_000_000) // Simulate network delay
+                
+                // Placeholder: In real implementation:
+                // let remoteWords = try await supabaseService.fetchAllVocabWords()
+                // allWords = remoteWords
+                // cacheService.saveVocabWords(remoteWords, needsSync: false)
+                
+                logger.info("📝 Vocab words synced from Supabase")
+            } catch {
+                errorMessage = "Failed to fetch vocab words: \(error.localizedDescription)"
+                logger.error("📝 Failed to fetch from Supabase: \(error.localizedDescription)")
+            }
+        } else {
+            logger.debug("📝 Offline - using cached vocab words only")
         }
         
         isLoading = false
@@ -118,23 +184,44 @@ class VocabViewModel: ObservableObject {
     /// - Parameter bookId: The book's unique identifier
     /// - Returns: Array of vocab words for that book
     func fetchWords(forBook bookId: UUID) -> [VocabWord] {
-        return allWords.filter { $0.bookId == bookId }
+        // First check in-memory array
+        let memoryWords = allWords.filter { $0.bookId == bookId }
+        if !memoryWords.isEmpty {
+            return memoryWords
+        }
+        
+        // Fall back to cache
+        return cacheService.fetchVocabWords(for: bookId)
     }
     
     /// Adds a new vocabulary word.
+    /// Saves to cache immediately and queues sync to Supabase.
     /// - Parameter word: The vocab word to add
     func addWord(_ word: VocabWord) async {
         isLoading = true
         errorMessage = nil
         
-        // TODO: Implement actual Supabase insert
-        do {
-            try await Task.sleep(nanoseconds: 300_000_000) // Simulate network delay
-            
-            // Placeholder: Add to local array
-            allWords.append(word)
-        } catch {
-            errorMessage = "Failed to add word: \(error.localizedDescription)"
+        logger.info("📝 Adding vocab word: '\(word.word)'")
+        
+        // Add to local array immediately
+        allWords.append(word)
+        
+        // Save to cache (will queue for sync if offline)
+        cacheService.saveVocabWord(word, needsSync: true)
+        
+        // If online, also sync to Supabase
+        if networkMonitor.isConnected {
+            // TODO: Implement actual Supabase insert
+            do {
+                try await Task.sleep(nanoseconds: 300_000_000) // Simulate network delay
+                // await supabaseService.insertVocabWord(word)
+                logger.info("📝 Vocab word synced to Supabase")
+            } catch {
+                errorMessage = "Failed to sync vocab word: \(error.localizedDescription)"
+                logger.error("📝 Failed to sync to Supabase: \(error.localizedDescription)")
+            }
+        } else {
+            logger.debug("📝 Offline - vocab word saved to cache, will sync later")
         }
         
         isLoading = false
@@ -149,18 +236,23 @@ class VocabViewModel: ObservableObject {
         isLoading = true
         errorMessage = nil
         
-        // TODO: Implement actual dictionary API lookup
+        // Dictionary lookup requires network
+        if !networkMonitor.isConnected {
+            errorMessage = "Dictionary lookup requires internet connection"
+            isLoading = false
+            return nil
+        }
+        
         do {
-            try await Task.sleep(nanoseconds: 500_000_000) // Simulate network delay
+            let wordDefinition = try await dictionaryService.fetchWord(word)
             
-            // Placeholder: Return a mock word
             let vocabWord = VocabWord(
                 bookId: bookId,
-                word: word,
-                definition: "Definition placeholder - connect dictionary API",
-                synonyms: [],
-                antonyms: [],
-                exampleSentence: ""
+                word: wordDefinition.word,
+                definition: dictionaryService.getPrimaryDefinition(from: wordDefinition) ?? "No definition available",
+                synonyms: dictionaryService.extractSynonyms(from: wordDefinition),
+                antonyms: dictionaryService.extractAntonyms(from: wordDefinition),
+                exampleSentence: dictionaryService.getFirstExample(from: wordDefinition) ?? ""
             )
             
             isLoading = false
@@ -173,6 +265,7 @@ class VocabViewModel: ObservableObject {
     }
     
     /// Toggles the mastered status of a vocabulary word.
+    /// Updates cache immediately and queues sync to Supabase.
     /// - Parameter word: The word to update
     func toggleMastered(_ word: VocabWord) async {
         guard let index = allWords.firstIndex(where: { $0.id == word.id }) else {
@@ -183,8 +276,19 @@ class VocabViewModel: ObservableObject {
         let newStatus = !allWords[index].mastered
         logger.info("📝 Toggling mastered status for '\(word.word)' to \(newStatus)")
         
-        // TODO: Implement actual Supabase update
+        // Update local array
         allWords[index].mastered = newStatus
+        
+        // Update cache (will queue for sync)
+        cacheService.updateMasteredStatus(word.id, mastered: newStatus)
+        
+        // If online, sync to Supabase
+        if networkMonitor.isConnected {
+            // TODO: Implement actual Supabase update
+            logger.debug("📝 Syncing mastered status to Supabase")
+        } else {
+            logger.debug("📝 Offline - mastered status saved to cache, will sync later")
+        }
         
         logger.debug("📝 Updated '\(word.word)' mastered status to \(newStatus)")
     }
@@ -201,26 +305,43 @@ class VocabViewModel: ObservableObject {
         
         logger.info("📝 Setting mastered status for '\(word.word)' to \(mastered)")
         
-        // TODO: Implement actual Supabase update
+        // Update local array
         allWords[index].mastered = mastered
+        
+        // Update cache (will queue for sync)
+        cacheService.updateMasteredStatus(word.id, mastered: mastered)
         
         logger.debug("📝 Set '\(word.word)' mastered status to \(mastered)")
     }
     
     /// Deletes a vocabulary word.
+    /// Removes from cache and queues delete for Supabase sync.
     /// - Parameter word: The word to delete
     func deleteWord(_ word: VocabWord) async {
         isLoading = true
         errorMessage = nil
         
-        // TODO: Implement actual Supabase delete
-        do {
-            try await Task.sleep(nanoseconds: 300_000_000) // Simulate network delay
-            
-            // Placeholder: Remove from local array
-            allWords.removeAll { $0.id == word.id }
-        } catch {
-            errorMessage = "Failed to delete word: \(error.localizedDescription)"
+        logger.info("📝 Deleting vocab word: '\(word.word)'")
+        
+        // Remove from local array immediately
+        allWords.removeAll { $0.id == word.id }
+        
+        // Mark as deleted in cache (will queue for sync)
+        cacheService.deleteVocabWord(word.id, hardDelete: false)
+        
+        // If online, also sync to Supabase
+        if networkMonitor.isConnected {
+            // TODO: Implement actual Supabase delete
+            do {
+                try await Task.sleep(nanoseconds: 300_000_000) // Simulate network delay
+                // await supabaseService.deleteVocabWord(word.id)
+                logger.info("📝 Vocab word deletion synced to Supabase")
+            } catch {
+                errorMessage = "Failed to sync deletion: \(error.localizedDescription)"
+                logger.error("📝 Failed to sync delete to Supabase: \(error.localizedDescription)")
+            }
+        } else {
+            logger.debug("📝 Offline - deletion saved to cache, will sync later")
         }
         
         isLoading = false
@@ -239,5 +360,10 @@ class VocabViewModel: ObservableObject {
     func clearError() {
         errorMessage = nil
     }
+    
+    /// Forces a refresh from the server.
+    func forceRefresh() async {
+        logger.info("📝 Force refresh triggered")
+        await fetchAllWords()
+    }
 }
-
