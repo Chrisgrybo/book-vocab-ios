@@ -2,88 +2,85 @@
 //  AddVocabView.swift
 //  BookVocab
 //
-//  Screen for adding a new vocabulary word.
-//  Fetches definition, synonyms, antonyms, and example sentences
-//  using the DictionaryService, then saves to Supabase.
+//  Premium sheet for adding vocabulary words.
+//  Clean design with dictionary lookup and editable fields.
+//
+//  Features:
+//  - Instant dictionary lookup
+//  - Auto-populated fields
+//  - Visual pill previews
+//  - Smooth transitions
+//  - Optional book picker for global words
 //
 
 import SwiftUI
 
-/// View for adding a new vocabulary word to a book.
-/// Supports automatic dictionary lookup for word details.
-///
-/// Flow:
-/// 1. User enters a word
-/// 2. User taps "Lookup" to fetch definition from Free Dictionary API
-/// 3. Fields are populated automatically (user can edit)
-/// 4. User taps "Save" to add word to the book's vocabulary list
 struct AddVocabView: View {
     
     // MARK: - Properties
     
-    /// The ID of the book to add the word to.
-    let bookId: UUID
+    /// The pre-assigned book ID. If nil, show book picker.
+    /// When coming from a book detail view, this is set.
+    /// When coming from the Words screen, this is nil.
+    let preassignedBookId: UUID?
+    
+    /// Whether to show the book picker (only when preassignedBookId is nil)
+    private var showBookPicker: Bool {
+        preassignedBookId == nil
+    }
     
     // MARK: - Environment
     
-    /// Dismiss action for the sheet.
     @Environment(\.dismiss) private var dismiss
-    
-    /// Access to the shared vocab view model for saving words.
     @EnvironmentObject var vocabViewModel: VocabViewModel
+    @EnvironmentObject var booksViewModel: BooksViewModel
     
     // MARK: - State
     
-    /// The word to add (user input).
     @State private var word: String = ""
-    
-    /// The word's definition (populated from API or manual entry).
     @State private var definition: String = ""
-    
-    /// Synonyms for the word (comma-separated string for editing).
     @State private var synonymsText: String = ""
-    
-    /// Antonyms for the word (comma-separated string for editing).
     @State private var antonymsText: String = ""
-    
-    /// Example sentence using the word.
     @State private var exampleSentence: String = ""
-    
-    /// Part of speech (noun, verb, etc.) - informational only.
     @State private var partOfSpeech: String = ""
-    
-    /// Loading state during dictionary lookup.
     @State private var isLoading: Bool = false
-    
-    /// Whether the word has been successfully looked up.
     @State private var hasLookedUp: Bool = false
-    
-    /// Error message to display in alert.
     @State private var errorMessage: String?
-    
-    /// Controls the error alert presentation.
     @State private var showingError: Bool = false
     
-    // MARK: - Computed Properties
+    /// The selected book ID when using the book picker.
+    /// Defaults to nil (global word / "All Words").
+    @State private var selectedBookId: UUID? = nil
     
-    /// Validates that required fields are filled.
-    /// Word and definition are required; other fields are optional.
-    private var isFormValid: Bool {
-        let hasWord = !word.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let hasDefinition = !definition.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        return hasWord && hasDefinition
+    /// The effective book ID to use when saving.
+    /// Uses preassigned if available, otherwise the picker selection.
+    private var effectiveBookId: UUID? {
+        preassignedBookId ?? selectedBookId
     }
     
-    /// Converts comma-separated synonyms text to array.
-    /// Trims whitespace and filters out empty strings.
+    private var isFormValid: Bool {
+        !word.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !definition.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+    
+    // MARK: - Convenience Initializers
+    
+    /// Initialize with a specific book (from book detail view)
+    init(bookId: UUID) {
+        self.preassignedBookId = bookId
+    }
+    
+    /// Initialize without a book (from Words screen)
+    init() {
+        self.preassignedBookId = nil
+    }
+    
     private var synonymsArray: [String] {
         synonymsText.split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
     }
     
-    /// Converts comma-separated antonyms text to array.
-    /// Trims whitespace and filters out empty strings.
     private var antonymsArray: [String] {
         antonymsText.split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespaces) }
@@ -94,43 +91,55 @@ struct AddVocabView: View {
     
     var body: some View {
         NavigationStack {
-            Form {
-                // Word input with lookup button
-                wordInputSection
-                
-                // Part of speech (if available)
-                if !partOfSpeech.isEmpty {
-                    partOfSpeechSection
+            ScrollView {
+                VStack(spacing: AppSpacing.lg) {
+                    // Book picker (only when coming from Words screen)
+                    if showBookPicker {
+                        bookPickerSection
+                    }
+                    
+                    // Word input with lookup
+                    wordInputSection
+                    
+                    // Success indicator
+                    if hasLookedUp {
+                        successBanner
+                    }
+                    
+                    // Definition
+                    definitionSection
+                    
+                    // Synonyms & Antonyms
+                    synonymsAntonymsSection
+                    
+                    // Example sentence
+                    exampleSection
                 }
-                
-                // Definition input
-                definitionSection
-                
-                // Synonyms & Antonyms inputs
-                synonymsAntonymsSection
-                
-                // Example sentence input
-                exampleSection
+                .padding(.horizontal, AppSpacing.horizontalPadding)
+                .padding(.vertical, AppSpacing.lg)
+                .padding(.bottom, AppSpacing.xxxl)
             }
+            .background(AppColors.groupedBackground)
             .navigationTitle("Add Word")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                // Cancel button - dismisses without saving
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
                         dismiss()
                     }
+                    .foregroundStyle(.secondary)
                 }
                 
-                // Save button - saves word to Supabase
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    Button {
                         saveWord()
+                    } label: {
+                        Text("Save")
+                            .fontWeight(.semibold)
                     }
                     .disabled(!isFormValid || isLoading)
                 }
             }
-            // Error alert for lookup failures
             .alert("Lookup Failed", isPresented: $showingError) {
                 Button("OK", role: .cancel) {
                     errorMessage = nil
@@ -141,235 +150,372 @@ struct AddVocabView: View {
         }
     }
     
-    // MARK: - View Components
+    // MARK: - Book Picker Section
     
-    /// Word input field with lookup button.
-    /// Shows success indicator after successful lookup.
+    private var bookPickerSection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            Label("Assign to Book", systemImage: "book.closed")
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundStyle(.secondary)
+            
+            Menu {
+                // "None" option for global words
+                Button {
+                    selectedBookId = nil
+                } label: {
+                    HStack {
+                        Text("None (All Words)")
+                        if selectedBookId == nil {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+                
+                Divider()
+                
+                // List all books
+                ForEach(booksViewModel.books) { book in
+                    Button {
+                        selectedBookId = book.id
+                    } label: {
+                        HStack {
+                            Text(book.title)
+                            if selectedBookId == book.id {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                HStack {
+                    if let bookId = selectedBookId,
+                       let book = booksViewModel.books.first(where: { $0.id == bookId }) {
+                        // Show selected book
+                        Image(systemName: "book.closed.fill")
+                            .foregroundStyle(AppColors.primary)
+                        Text(book.title)
+                            .foregroundStyle(.primary)
+                    } else {
+                        // No book selected
+                        Image(systemName: "tray.full")
+                            .foregroundStyle(.secondary)
+                        Text("None (All Words)")
+                            .foregroundStyle(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(AppSpacing.md)
+                .background(AppColors.cardBackground)
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
+                .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
+            }
+            
+            Text("Leave as 'None' to add a global word not tied to any book")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+    }
+    
+    // MARK: - Word Input Section
+    
     private var wordInputSection: some View {
-        Section {
-            HStack {
-                // Word text field
-                TextField("Enter word", text: $word)
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            Label("Word", systemImage: "textformat")
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundStyle(.secondary)
+            
+            HStack(spacing: AppSpacing.sm) {
+                TextField("Enter a word", text: $word)
+                    .font(.title3)
+                    .fontWeight(.medium)
+                    .textFieldStyle(.plain)
                     .autocapitalization(.none)
                     .autocorrectionDisabled()
                     .onChange(of: word) { _, _ in
-                        // Reset lookup status when word changes
-                        if hasLookedUp {
-                            hasLookedUp = false
-                        }
+                        if hasLookedUp { hasLookedUp = false }
                     }
                 
                 // Lookup button
                 Button {
-                    Task {
-                        await lookupWord()
-                    }
+                    Task { await lookupWord() }
                 } label: {
-                    if isLoading {
-                        // Show spinner during lookup
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle())
-                    } else {
-                        // Show magnifying glass icon
-                        Image(systemName: "magnifyingglass")
+                    Group {
+                        if isLoading {
+                            ProgressView()
+                                .tint(.white)
+                        } else {
+                            Image(systemName: "magnifyingglass")
+                        }
                     }
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background {
+                        if word.isEmpty {
+                            Color.gray.opacity(0.3)
+                        } else {
+                            AppColors.primary
+                        }
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
                 }
                 .disabled(word.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
             }
+            .padding(AppSpacing.md)
+            .background(AppColors.cardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
+            .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
             
-            // Success indicator after lookup
-            if hasLookedUp {
-                HStack {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                    Text("Definition found! You can edit fields below.")
+            Text("Tap the search button to look up the definition")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+    }
+    
+    // MARK: - Success Banner
+    
+    private var successBanner: some View {
+        HStack(spacing: AppSpacing.sm) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(AppColors.success)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Definition Found!")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                
+                if !partOfSpeech.isEmpty {
+                    Text(partOfSpeech.capitalized)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
-        } header: {
-            Text("Word")
-        } footer: {
-            Text("Enter a word and tap the search icon to look up its definition.")
-        }
-    }
-    
-    /// Displays the part of speech (noun, verb, etc.).
-    /// Only shown when a word has been looked up.
-    private var partOfSpeechSection: some View {
-        Section("Part of Speech") {
-            Text(partOfSpeech.capitalized)
+            
+            Spacer()
+            
+            Text("Edit below")
+                .font(.caption)
                 .foregroundStyle(.secondary)
         }
+        .padding(AppSpacing.md)
+        .background(AppColors.success.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+        .transition(.opacity.combined(with: .move(edge: .top)))
     }
     
-    /// Definition text field (multi-line).
+    // MARK: - Definition Section
+    
     private var definitionSection: some View {
-        Section {
-            TextField("Enter definition", text: $definition, axis: .vertical)
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            HStack {
+                Label("Definition", systemImage: "text.book.closed")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+                
+                Text("Required")
+                    .font(.caption2)
+                    .fontWeight(.medium)
+                    .foregroundStyle(AppColors.warning)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(AppColors.warning.opacity(0.15))
+                    .clipShape(Capsule())
+            }
+            
+            TextField("Enter or edit the definition", text: $definition, axis: .vertical)
                 .lineLimit(3...6)
-        } header: {
-            Text("Definition")
-        } footer: {
-            Text("Required. The definition will be saved with the word.")
+                .textFieldStyle(.plain)
+                .padding(AppSpacing.md)
+                .background(AppColors.cardBackground)
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
+                .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
         }
     }
     
-    /// Synonyms and antonyms input fields.
-    /// Shows pill-style previews of entered words.
+    // MARK: - Synonyms & Antonyms Section
+    
     private var synonymsAntonymsSection: some View {
-        Section {
-            // Synonyms text field
-            TextField("Synonyms (comma separated)", text: $synonymsText)
-                .autocapitalization(.none)
-            
-            // Antonyms text field
-            TextField("Antonyms (comma separated)", text: $antonymsText)
-                .autocapitalization(.none)
-            
-            // Visual preview of synonyms/antonyms as pills
-            if !synonymsArray.isEmpty || !antonymsArray.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    // Synonyms pills
-                    if !synonymsArray.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack {
-                                Text("Synonyms:")
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
+            // Synonyms
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                Label("Synonyms", systemImage: "equal.circle")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+                
+                TextField("Similar words (comma separated)", text: $synonymsText)
+                    .textFieldStyle(.plain)
+                    .autocapitalization(.none)
+                    .padding(AppSpacing.md)
+                    .background(AppColors.cardBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
+                    .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
+                
+                // Preview pills
+                if !synonymsArray.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: AppSpacing.xs) {
+                            ForEach(synonymsArray.prefix(5), id: \.self) { synonym in
+                                Text(synonym)
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                ForEach(synonymsArray.prefix(5), id: \.self) { synonym in
-                                    Text(synonym)
-                                        .font(.caption)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Color.blue.opacity(0.1))
-                                        .clipShape(Capsule())
-                                }
-                                if synonymsArray.count > 5 {
-                                    Text("+\(synonymsArray.count - 5) more")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(Color.blue.opacity(0.1))
+                                    .foregroundStyle(.blue)
+                                    .clipShape(Capsule())
                             }
-                        }
-                    }
-                    
-                    // Antonyms pills
-                    if !antonymsArray.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack {
-                                Text("Antonyms:")
+                            if synonymsArray.count > 5 {
+                                Text("+\(synonymsArray.count - 5)")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
-                                ForEach(antonymsArray.prefix(5), id: \.self) { antonym in
-                                    Text(antonym)
-                                        .font(.caption)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Color.red.opacity(0.1))
-                                        .clipShape(Capsule())
-                                }
-                                if antonymsArray.count > 5 {
-                                    Text("+\(antonymsArray.count - 5) more")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
                             }
                         }
                     }
                 }
             }
-        } header: {
-            Text("Synonyms & Antonyms")
-        } footer: {
-            Text("Optional. Separate multiple words with commas.")
+            
+            // Antonyms
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                Label("Antonyms", systemImage: "arrow.left.arrow.right.circle")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+                
+                TextField("Opposite words (comma separated)", text: $antonymsText)
+                    .textFieldStyle(.plain)
+                    .autocapitalization(.none)
+                    .padding(AppSpacing.md)
+                    .background(AppColors.cardBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
+                    .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
+                
+                // Preview pills
+                if !antonymsArray.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: AppSpacing.xs) {
+                            ForEach(antonymsArray.prefix(5), id: \.self) { antonym in
+                                Text(antonym)
+                                    .font(.caption)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(Color.orange.opacity(0.1))
+                                    .foregroundStyle(.orange)
+                                    .clipShape(Capsule())
+                            }
+                            if antonymsArray.count > 5 {
+                                Text("+\(antonymsArray.count - 5)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
     
-    /// Example sentence text field (multi-line).
+    // MARK: - Example Section
+    
     private var exampleSection: some View {
-        Section {
-            TextField("Enter an example sentence", text: $exampleSentence, axis: .vertical)
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            HStack {
+                Label("Example Sentence", systemImage: "text.quote")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+                
+                Text("Optional")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            
+            TextField("An example sentence using the word", text: $exampleSentence, axis: .vertical)
                 .lineLimit(2...4)
-        } header: {
-            Text("Example Sentence")
-        } footer: {
-            Text("Optional. An example helps reinforce learning.")
+                .textFieldStyle(.plain)
+                .padding(AppSpacing.md)
+                .background(AppColors.cardBackground)
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
+                .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
         }
     }
     
     // MARK: - Actions
     
-    /// Looks up the word using the DictionaryService.
-    /// Populates all fields with the API response data.
     private func lookupWord() async {
-        // Set loading state
         isLoading = true
         errorMessage = nil
         
         do {
-            // Call the Dictionary API via our service
             let result = try await DictionaryService.shared.fetchWord(word)
             
-            // Extract and populate the definition
-            if let primaryDefinition = DictionaryService.shared.getPrimaryDefinition(from: result) {
-                definition = primaryDefinition
+            await MainActor.run {
+                withAnimation(AppAnimation.spring) {
+                    // IMPORTANT: Clear all fields BEFORE populating with new data
+                    // This ensures stale data from a previous lookup doesn't persist
+                    // if the new word is missing certain fields (synonyms, antonyms, etc.)
+                    definition = ""
+                    synonymsText = ""
+                    antonymsText = ""
+                    exampleSentence = ""
+                    partOfSpeech = ""
+                    
+                    // Now populate only with fields returned by the API
+                    if let primaryDef = DictionaryService.shared.getPrimaryDefinition(from: result) {
+                        definition = primaryDef
+                    }
+                    
+                    let synonyms = DictionaryService.shared.extractSynonyms(from: result)
+                    if !synonyms.isEmpty {
+                        synonymsText = synonyms.joined(separator: ", ")
+                    }
+                    
+                    let antonyms = DictionaryService.shared.extractAntonyms(from: result)
+                    if !antonyms.isEmpty {
+                        antonymsText = antonyms.joined(separator: ", ")
+                    }
+                    
+                    if let example = DictionaryService.shared.getFirstExample(from: result) {
+                        exampleSentence = example
+                    }
+                    
+                    if let pos = DictionaryService.shared.getPrimaryPartOfSpeech(from: result) {
+                        partOfSpeech = pos
+                    }
+                    
+                    hasLookedUp = true
+                }
             }
-            
-            // Extract and populate synonyms (as comma-separated string)
-            let synonyms = DictionaryService.shared.extractSynonyms(from: result)
-            if !synonyms.isEmpty {
-                synonymsText = synonyms.joined(separator: ", ")
-            }
-            
-            // Extract and populate antonyms (as comma-separated string)
-            let antonyms = DictionaryService.shared.extractAntonyms(from: result)
-            if !antonyms.isEmpty {
-                antonymsText = antonyms.joined(separator: ", ")
-            }
-            
-            // Extract and populate example sentence
-            if let example = DictionaryService.shared.getFirstExample(from: result) {
-                exampleSentence = example
-            }
-            
-            // Extract and populate part of speech
-            if let pos = DictionaryService.shared.getPrimaryPartOfSpeech(from: result) {
-                partOfSpeech = pos
-            }
-            
-            // Mark as successfully looked up
-            hasLookedUp = true
-            
         } catch let error as DictionaryError {
-            // Handle dictionary-specific errors with user-friendly messages
             errorMessage = error.localizedDescription
             showingError = true
         } catch {
-            // Handle unexpected errors
             errorMessage = "An unexpected error occurred: \(error.localizedDescription)"
             showingError = true
         }
         
-        // Clear loading state
         isLoading = false
     }
     
-    /// Saves the vocabulary word to the user's collection via VocabViewModel.
-    /// Creates a VocabWord model and calls the ViewModel's addWord method.
     private func saveWord() {
-        // Create the VocabWord model with all entered data
         let vocabWord = VocabWord(
-            bookId: bookId,
+            bookId: effectiveBookId,
             word: word.trimmingCharacters(in: .whitespacesAndNewlines).capitalized,
             definition: definition.trimmingCharacters(in: .whitespacesAndNewlines),
             synonyms: synonymsArray,
             antonyms: antonymsArray,
             exampleSentence: exampleSentence.trimmingCharacters(in: .whitespacesAndNewlines),
-            mastered: false  // New words default to not mastered
+            mastered: false
         )
         
-        // Save via the ViewModel (which will call SupabaseService)
         Task {
             await vocabViewModel.addWord(vocabWord)
             dismiss()
@@ -379,7 +525,14 @@ struct AddVocabView: View {
 
 // MARK: - Preview
 
-#Preview {
+#Preview("With Book") {
     AddVocabView(bookId: UUID())
         .environmentObject(VocabViewModel())
+        .environmentObject(BooksViewModel())
+}
+
+#Preview("Without Book (Book Picker)") {
+    AddVocabView()
+        .environmentObject(VocabViewModel())
+        .environmentObject(BooksViewModel())
 }

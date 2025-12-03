@@ -47,6 +47,9 @@ class SupabaseService {
     private init() {
         // Initialize the Supabase client with project credentials from Secrets
         // The client handles token storage, refresh, and all API communications
+        //
+        // Note: The Supabase SDK may show a warning about emitLocalSessionAsInitialSession.
+        // This is informational about future API changes and can be safely ignored for now.
         self.client = SupabaseClient(
             supabaseURL: URL(string: Secrets.supabaseUrl)!,
             supabaseKey: Secrets.supabaseKey

@@ -3,12 +3,13 @@
 //  BookVocab
 //
 //  Main home screen displaying the user's book collection.
-//  Shows book covers, word counts, and provides navigation to book details.
+//  Premium design inspired by Apple Books + Goodreads.
 //
-//  Cover Display Logic:
-//  - Uses AsyncImage to load covers from URLs
-//  - Falls back to placeholder if URL is nil, empty, or fails to load
-//  - All URLs should be HTTPS (converted by BookSearchService)
+//  Features:
+//  - Beautiful gradient header with stats
+//  - Book grid with large cover images
+//  - Smooth animations and transitions
+//  - Pull to refresh
 //
 
 import SwiftUI
@@ -19,36 +20,27 @@ private let logger = Logger(subsystem: "com.bookvocab.app", category: "HomeView"
 
 /// The home screen showing a list of the user's books.
 ///
-/// Features:
-/// - Book list with cover images and word counts
-/// - Stats summary showing total books and words learned
-/// - Search and filter functionality
-/// - Pull to refresh
-/// - Add book button
+/// Premium design with:
+/// - Gradient header with vocabulary stats
+/// - Beautiful book cards with cover images
+/// - Smooth appear animations
+/// - Clean, spacious layout
 struct HomeView: View {
     
     // MARK: - Environment
     
-    /// Access to the shared user session view model for sign out functionality.
     @EnvironmentObject var session: UserSessionViewModel
-    
-    /// Access to the shared books view model.
     @EnvironmentObject var booksViewModel: BooksViewModel
-    
-    /// Access to the shared vocab view model.
     @EnvironmentObject var vocabViewModel: VocabViewModel
     
     // MARK: - State
     
-    /// Controls presentation of the Add Book sheet.
     @State private var showingAddBook: Bool = false
-    
-    /// Search text for filtering books.
     @State private var searchText: String = ""
+    @State private var hasAppeared: Bool = false
     
     // MARK: - Computed Properties
     
-    /// Books filtered by search text.
     private var filteredBooks: [Book] {
         if searchText.isEmpty {
             return booksViewModel.books
@@ -59,82 +51,47 @@ struct HomeView: View {
         }
     }
     
-    /// Get the current user's email for display.
-    private var userEmail: String {
-        session.currentUser?.email ?? "User"
+    private var userDisplayName: String {
+        if let email = session.currentUser?.email {
+            return String(email.split(separator: "@").first ?? "Reader")
+        }
+        return "Reader"
     }
     
-    /// Total number of books in the collection.
-    private var totalBooks: Int {
-        booksViewModel.books.count
-    }
-    
-    /// Total number of vocabulary words across all books.
-    private var totalWords: Int {
-        vocabViewModel.totalWordCount
-    }
-    
-    /// Number of mastered words.
-    private var masteredWords: Int {
-        vocabViewModel.masteredCount
-    }
+    private var totalBooks: Int { booksViewModel.books.count }
+    private var totalWords: Int { vocabViewModel.totalWordCount }
+    private var masteredWords: Int { vocabViewModel.masteredCount }
     
     // MARK: - Body
     
     var body: some View {
         NavigationStack {
-            Group {
-                if booksViewModel.books.isEmpty {
-                    // Empty state when no books
-                    emptyStateView
-                } else {
-                    // Main book list
-                    bookListView
+            ScrollView {
+                VStack(spacing: 0) {
+                    // Header with greeting and stats
+                    headerSection
+                    
+                    // Main content
+                    if booksViewModel.books.isEmpty {
+                        emptyStateView
+                            .padding(.top, AppSpacing.xxxl)
+                    } else {
+                        booksSection
+                    }
                 }
             }
-            .navigationTitle("My Books")
+            .background(AppColors.groupedBackground)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                // Add book button
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        showingAddBook = true
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title3)
-                    }
+                ToolbarItem(placement: .topBarLeading) {
+                    profileButton
                 }
                 
-                // Profile/Settings menu
-                ToolbarItem(placement: .topBarLeading) {
-                    Menu {
-                        // User info section
-                        Section {
-                            Label(userEmail, systemImage: "person.circle")
-                        }
-                        
-                        // Stats section
-                        Section {
-                            Label("\(totalBooks) books", systemImage: "book.closed")
-                            Label("\(totalWords) words learned", systemImage: "textformat.abc")
-                            Label("\(masteredWords) mastered", systemImage: "checkmark.circle")
-                        }
-                        
-                        Divider()
-                        
-                        // Sign out
-                        Button(role: .destructive) {
-                            Task {
-                                await session.signOut()
-                            }
-                        } label: {
-                            Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
-                        }
-                    } label: {
-                        Image(systemName: "person.circle.fill")
-                            .font(.title3)
-                    }
+                ToolbarItem(placement: .topBarTrailing) {
+                    addButton
                 }
             }
+            .searchable(text: $searchText, prompt: "Search books...")
             .sheet(isPresented: $showingAddBook) {
                 AddBookView()
             }
@@ -143,302 +100,331 @@ struct HomeView: View {
                 await vocabViewModel.fetchAllWords()
             }
         }
+        .onAppear {
+            withAnimation(AppAnimation.spring.delay(0.1)) {
+                hasAppeared = true
+            }
+        }
     }
     
-    // MARK: - View Components
+    // MARK: - Header Section
     
-    /// Empty state when user has no books.
-    private var emptyStateView: some View {
-        VStack(spacing: 24) {
-            // Illustration
-            Image(systemName: "books.vertical.fill")
-                .font(.system(size: 80))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [.blue, .blue.opacity(0.6)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+    private var headerSection: some View {
+        VStack(spacing: AppSpacing.lg) {
+            // Greeting
+            HStack {
+                VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                    Text("Hello, \(userDisplayName)")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                    
+                    Text("Keep building your vocabulary")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                
+                Spacer()
+            }
+            .padding(.horizontal, AppSpacing.horizontalPadding)
+            .padding(.top, AppSpacing.md)
             
-            // Welcome text
-            VStack(spacing: 8) {
-                Text("Welcome to Book Vocab!")
-                    .font(.title2)
+            // Stats card
+            statsCard
+                .padding(.horizontal, AppSpacing.horizontalPadding)
+        }
+        .padding(.bottom, AppSpacing.lg)
+        .background(AppColors.groupedBackground)
+    }
+    
+    private var statsCard: some View {
+        HStack(spacing: 0) {
+            StatDisplay("\(totalWords)", label: "Words", icon: "textformat.abc", color: .blue)
+            
+            Rectangle()
+                .fill(Color.gray.opacity(0.2))
+                .frame(width: 1, height: 50)
+            
+            StatDisplay("\(masteredWords)", label: "Mastered", icon: "checkmark.circle.fill", color: AppColors.success)
+            
+            Rectangle()
+                .fill(Color.gray.opacity(0.2))
+                .frame(width: 1, height: 50)
+            
+            StatDisplay("\(totalWords - masteredWords)", label: "Learning", icon: "book.fill", color: AppColors.warning)
+        }
+        .padding(.vertical, AppSpacing.md)
+        .cardStyle(cornerRadius: AppRadius.large)
+        .opacity(hasAppeared ? 1 : 0)
+        .offset(y: hasAppeared ? 0 : 20)
+    }
+    
+    // MARK: - Books Section
+    
+    private var booksSection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
+            // Section header
+            HStack {
+                Text("My Library")
+                    .font(.title3)
                     .fontWeight(.bold)
                 
-                Text("Start building your vocabulary by adding books you're reading.")
+                Spacer()
+                
+                Text("\(filteredBooks.count) books")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
             }
+            .padding(.horizontal, AppSpacing.horizontalPadding)
+            .padding(.top, AppSpacing.lg)
             
-            // Add book button
-            Button {
-                showingAddBook = true
-            } label: {
-                Label("Add Your First Book", systemImage: "plus.circle.fill")
-                    .font(.headline)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
-            }
-            .buttonStyle(.borderedProminent)
-            .buttonBorderShape(.capsule)
-        }
-        .padding()
-    }
-    
-    /// Main list showing books with stats header.
-    private var bookListView: some View {
-        List {
-            // Stats summary section
-            Section {
-                statsCard
-            }
-            .listRowInsets(EdgeInsets())
-            .listRowBackground(Color.clear)
-            
-            // Books section
-            Section {
-                ForEach(filteredBooks) { book in
+            // Book list
+            LazyVStack(spacing: AppSpacing.md) {
+                ForEach(Array(filteredBooks.enumerated()), id: \.element.id) { index, book in
                     NavigationLink(destination: BookDetailView(book: book)) {
-                        BookCard(book: book)
+                        BookCardView(book: book)
                     }
-                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                }
-                .onDelete { offsets in
-                    Task {
-                        // Convert filtered offsets to actual book indices
-                        let booksToDelete = offsets.map { filteredBooks[$0] }
-                        for book in booksToDelete {
-                            await booksViewModel.deleteBook(book)
+                    .buttonStyle(.plain)
+                    .opacity(hasAppeared ? 1 : 0)
+                    .offset(y: hasAppeared ? 0 : 30)
+                    .animation(
+                        AppAnimation.spring.delay(Double(index) * 0.05),
+                        value: hasAppeared
+                    )
+                    .contextMenu {
+                        Button(role: .destructive) {
+                            Task {
+                                await booksViewModel.deleteBook(book)
+                            }
+                        } label: {
+                            Label("Delete", systemImage: "trash")
                         }
                     }
                 }
-            } header: {
-                if !searchText.isEmpty {
-                    Text("Results for \"\(searchText)\"")
-                } else {
-                    Text("\(filteredBooks.count) \(filteredBooks.count == 1 ? "Book" : "Books")")
-                }
             }
+            .padding(.horizontal, AppSpacing.horizontalPadding)
+            .padding(.bottom, AppSpacing.xxxl)
         }
-        .listStyle(.insetGrouped)
-        .searchable(text: $searchText, prompt: "Search books...")
     }
     
-    /// Stats card showing vocabulary progress.
-    private var statsCard: some View {
-        HStack(spacing: 0) {
-            // Total Words
-            StatItem(
-                value: "\(totalWords)",
-                label: "Words",
-                icon: "textformat.abc",
-                color: .blue
-            )
-            
-            Divider()
-                .frame(height: 50)
-            
-            // Mastered
-            StatItem(
-                value: "\(masteredWords)",
-                label: "Mastered",
-                icon: "checkmark.circle.fill",
-                color: .green
-            )
-            
-            Divider()
-                .frame(height: 50)
-            
-            // Learning
-            StatItem(
-                value: "\(totalWords - masteredWords)",
-                label: "Learning",
-                icon: "book.fill",
-                color: .orange
-            )
-        }
-        .padding(.vertical, 16)
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-    }
-}
-
-// MARK: - Stat Item
-
-/// A single statistic display item.
-struct StatItem: View {
-    let value: String
-    let label: String
-    let icon: String
-    let color: Color
+    // MARK: - Empty State
     
-    var body: some View {
-        VStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.title3)
-                .foregroundStyle(color)
+    private var emptyStateView: some View {
+        VStack(spacing: AppSpacing.xl) {
+            // Illustration
+            ZStack {
+                Circle()
+                    .fill(AppColors.tanDark.opacity(0.5))
+                    .frame(width: 140, height: 140)
+                
+                Image(systemName: "books.vertical.fill")
+                    .font(.system(size: 56))
+                    .foregroundStyle(AppColors.primary)
+            }
             
-            Text(value)
+            VStack(spacing: AppSpacing.sm) {
+                Text("Start Your Journey")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                
+                Text("Add your first book and begin\nbuilding your vocabulary.")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            
+            Button {
+                showingAddBook = true
+            } label: {
+                Label("Add Your First Book", systemImage: "plus")
+            }
+            .buttonStyle(.primary)
+            .padding(.horizontal, AppSpacing.xxxl)
+        }
+        .padding(AppSpacing.xl)
+        .opacity(hasAppeared ? 1 : 0)
+        .offset(y: hasAppeared ? 0 : 30)
+    }
+    
+    // MARK: - Toolbar Items
+    
+    private var profileButton: some View {
+        Menu {
+            Section {
+                Label(session.currentUser?.email ?? "User", systemImage: "person.circle")
+            }
+            
+            Section {
+                Label("\(totalBooks) books", systemImage: "book.closed.fill")
+                Label("\(totalWords) words learned", systemImage: "textformat.abc")
+                Label("\(masteredWords) mastered", systemImage: "checkmark.circle.fill")
+            }
+            
+            Divider()
+            
+            Button(role: .destructive) {
+                Task {
+                    await session.signOut()
+                }
+            } label: {
+                Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+            }
+        } label: {
+            Image(systemName: "person.circle.fill")
                 .font(.title2)
-                .fontWeight(.bold)
-            
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppColors.primary)
         }
-        .frame(maxWidth: .infinity)
+    }
+    
+    private var addButton: some View {
+        Button {
+            showingAddBook = true
+        } label: {
+            Image(systemName: "plus")
+                .font(.title3)
+                .fontWeight(.semibold)
+                .foregroundStyle(.white)
+                .frame(width: 32, height: 32)
+                .background(AppColors.primary)
+                .clipShape(Circle())
+        }
     }
 }
 
-// MARK: - Book Card
+// MARK: - Book Card View
 
-/// A card displaying a single book with cover, title, author, and word count.
-struct BookCard: View {
-    
-    /// The book to display.
+/// A premium book card with cover, title, author, and progress.
+struct BookCardView: View {
     let book: Book
     
-    /// Access to vocab view model to show word count.
     @EnvironmentObject var vocabViewModel: VocabViewModel
     
-    /// Words for this book.
     private var bookWords: [VocabWord] {
         vocabViewModel.fetchWords(forBook: book.id)
     }
     
-    /// Count of vocab words for this book.
-    private var wordCount: Int {
-        bookWords.count
-    }
-    
-    /// Count of mastered words for this book.
-    private var masteredCount: Int {
-        bookWords.filter { $0.mastered }.count
+    private var wordCount: Int { bookWords.count }
+    private var masteredCount: Int { bookWords.filter { $0.mastered }.count }
+    private var progress: Double {
+        guard wordCount > 0 else { return 0 }
+        return Double(masteredCount) / Double(wordCount)
     }
     
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: AppSpacing.md) {
             // Book cover
-            bookCoverView
+            bookCover
             
             // Book info
-            VStack(alignment: .leading, spacing: 6) {
-                // Title
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
                 Text(book.title)
                     .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.primary)
                     .lineLimit(2)
                 
-                // Author
                 Text(book.author)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 
-                // Word count badge
-                HStack(spacing: 12) {
-                    Label("\(wordCount) words", systemImage: "textformat.abc")
-                        .font(.caption)
-                        .foregroundStyle(.blue)
-                    
-                    if masteredCount > 0 {
-                        Label("\(masteredCount) mastered", systemImage: "checkmark.circle.fill")
+                Spacer(minLength: AppSpacing.xs)
+                
+                // Stats row - always show both stats for consistent layout
+                HStack(spacing: AppSpacing.md) {
+                    HStack(spacing: AppSpacing.xxs) {
+                        Image(systemName: "textformat.abc")
                             .font(.caption)
-                            .foregroundStyle(.green)
+                        Text("\(wordCount)")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                    }
+                    .foregroundStyle(.blue)
+                    
+                    HStack(spacing: AppSpacing.xxs) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.caption)
+                        Text("\(masteredCount)")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                    }
+                    .foregroundStyle(AppColors.success)
+                    .opacity(masteredCount > 0 ? 1 : 0.3)
+                }
+                
+                // Progress bar - always show for consistent height
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(Color.gray.opacity(0.15))
+                            .frame(height: 4)
+                        
+                        Capsule()
+                            .fill(AppColors.greenGradient)
+                            .frame(width: geo.size.width * progress, height: 4)
                     }
                 }
+                .frame(height: 4)
             }
             
-            Spacer()
-            
-            // Chevron indicator
+            // Chevron
             Image(systemName: "chevron.right")
                 .font(.caption)
+                .fontWeight(.semibold)
                 .foregroundStyle(.tertiary)
         }
-        .padding(.vertical, 4)
+        .frame(height: 110)
+        .cardStyle(padding: AppSpacing.md)
     }
     
-    /// Book cover image or placeholder.
-    /// Uses AsyncImage to load covers from URLs with proper fallback handling.
-    private var bookCoverView: some View {
+    private var bookCover: some View {
         Group {
             if let coverUrl = book.coverImageUrl, !coverUrl.isEmpty, let url = URL(string: coverUrl) {
-                // Load cover image from URL
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .onAppear {
-                                // Log successful cover load
-                                logger.debug("🖼️ Cover loaded: '\(book.title)'")
-                            }
-                    case .failure(let error):
+                    case .failure:
                         coverPlaceholder
-                            .onAppear {
-                                // Log cover load failure for debugging
-                                logger.error("🖼️ Cover FAILED for '\(book.title)': \(error.localizedDescription)")
-                                logger.debug("🖼️ Failed URL: \(coverUrl)")
-                            }
                     case .empty:
                         coverPlaceholder
                             .overlay {
                                 ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle())
+                                    .tint(.white)
                             }
                     @unknown default:
                         coverPlaceholder
                     }
                 }
             } else {
-                // No cover URL available
                 coverPlaceholder
-                    .onAppear {
-                        if book.coverImageUrl == nil {
-                            logger.debug("🖼️ No cover URL for '\(book.title)' (nil)")
-                        } else if book.coverImageUrl?.isEmpty == true {
-                            logger.debug("🖼️ No cover URL for '\(book.title)' (empty string)")
-                        } else {
-                            logger.warning("🖼️ Invalid cover URL for '\(book.title)': \(book.coverImageUrl ?? "unknown")")
-                        }
-                    }
             }
         }
-        .frame(width: 60, height: 85)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
-        .shadow(color: .black.opacity(0.15), radius: 4, x: 0, y: 2)
+        .frame(width: 70, height: 100)
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
+        .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
     }
     
-    /// Placeholder for books without cover images.
     private var coverPlaceholder: some View {
-        RoundedRectangle(cornerRadius: 6)
-            .fill(
-                LinearGradient(
-                    colors: [Color.blue.opacity(0.3), Color.blue.opacity(0.1)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
+        ZStack {
+            LinearGradient(
+                colors: [AppColors.tanDark, AppColors.tan],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
             )
-            .overlay {
-                VStack(spacing: 4) {
-                    Image(systemName: "book.closed.fill")
-                        .font(.title3)
-                        .foregroundStyle(.blue.opacity(0.6))
-                    
-                    Text(book.title.prefix(10))
-                        .font(.system(size: 8))
-                        .foregroundStyle(.blue.opacity(0.4))
-                        .lineLimit(1)
-                }
+            
+            VStack(spacing: 4) {
+                Image(systemName: "book.closed.fill")
+                    .font(.title2)
+                    .foregroundStyle(AppColors.primary.opacity(0.5))
+                
+                Text(book.title.prefix(8))
+                    .font(.system(size: 8, weight: .medium))
+                    .foregroundStyle(AppColors.primary.opacity(0.4))
+                    .lineLimit(1)
             }
+        }
     }
 }
 

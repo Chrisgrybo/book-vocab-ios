@@ -314,7 +314,7 @@ public class CachedVocabWord: NSManagedObject {
     func toVocabWord() -> VocabWord {
         VocabWord(
             id: id ?? UUID(),
-            bookId: bookId ?? UUID(),
+            bookId: bookId,  // Keep nil for global words
             word: word ?? "",
             definition: definition ?? "",
             synonyms: synonyms?.components(separatedBy: ", ").filter { !$0.isEmpty } ?? [],

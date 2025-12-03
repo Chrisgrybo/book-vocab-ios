@@ -9,7 +9,7 @@
 import Foundation
 
 /// Represents a vocabulary word that the user is learning.
-/// Associated with a specific book and tracks mastery status.
+/// Can be associated with a specific book or exist as a global word.
 struct VocabWord: Identifiable, Codable, Hashable {
     
     // MARK: - Properties
@@ -18,7 +18,8 @@ struct VocabWord: Identifiable, Codable, Hashable {
     let id: UUID
     
     /// The ID of the book this word was found in.
-    let bookId: UUID
+    /// If nil, the word is a "global" word not tied to any specific book.
+    let bookId: UUID?
     
     /// The vocabulary word itself.
     var word: String
@@ -61,7 +62,7 @@ struct VocabWord: Identifiable, Codable, Hashable {
     /// Creates a new VocabWord instance with all required properties.
     /// - Parameters:
     ///   - id: Unique identifier (defaults to new UUID)
-    ///   - bookId: The associated book's ID
+    ///   - bookId: The associated book's ID (nil for global words)
     ///   - word: The vocabulary word
     ///   - definition: Word definition
     ///   - synonyms: Array of synonyms (defaults to empty)
@@ -71,7 +72,7 @@ struct VocabWord: Identifiable, Codable, Hashable {
     ///   - createdAt: Creation timestamp (defaults to now)
     init(
         id: UUID = UUID(),
-        bookId: UUID,
+        bookId: UUID? = nil,
         word: String,
         definition: String,
         synonyms: [String] = [],

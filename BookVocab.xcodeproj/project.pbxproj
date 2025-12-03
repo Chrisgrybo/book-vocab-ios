@@ -40,6 +40,7 @@
 		VW008 /* StudyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC019 /* StudyView.swift */; };
 		VW009 /* FlashcardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC023 /* FlashcardView.swift */; };
 		VW010 /* QuizView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC024 /* QuizView.swift */; };
+		VW011 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC029 /* Theme.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -74,6 +75,7 @@
 		SRC020 /* UserSessionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserSessionViewModel.swift; sourceTree = "<group>"; };
 		SRC021 /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		SRC022 /* Secrets.example.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.example.swift; sourceTree = "<group>"; };
+		SRC029 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -152,6 +154,7 @@
 				GRP009 /* Home */,
 				GRP010 /* Vocab */,
 				GRP011 /* Study */,
+				GRP013 /* Components */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -213,6 +216,14 @@
 				SRC024 /* QuizView.swift */,
 			);
 			path = Study;
+			sourceTree = "<group>";
+		};
+		GRP013 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				SRC029 /* Theme.swift */,
+			);
+			path = Components;
 			sourceTree = "<group>";
 		};
 		ROOT001 = {
@@ -323,6 +334,7 @@
 				VW008 /* StudyView.swift in Sources */,
 				VW009 /* FlashcardView.swift in Sources */,
 				VW010 /* QuizView.swift in Sources */,
+				VW011 /* Theme.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

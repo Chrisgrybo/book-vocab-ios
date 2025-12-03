@@ -2,27 +2,21 @@
 //  FlashcardView.swift
 //  BookVocab
 //
-//  Flashcard study mode with flip animations and swipe gestures.
-//  Users can review words, flip to see definitions, and mark as mastered.
+//  Premium flashcard study mode with beautiful animations.
+//  Delightful 3D flip effect and swipe gestures.
 //
 //  Features:
-//  - Tap to flip cards with 3D animation
-//  - Swipe right to mark as mastered
-//  - Swipe left to skip
+//  - 3D flip animation
+//  - Swipe right to master, left to skip
 //  - Progress tracking
-//  - Session completion summary
+//  - Session summary
 //
 
 import SwiftUI
 import os.log
 
-/// Logger for FlashcardView debugging
 private let logger = Logger(subsystem: "com.bookvocab.app", category: "FlashcardView")
 
-// MARK: - Flashcard Session View
-
-/// Main view for flashcard study sessions.
-/// Manages the session flow and displays individual flashcards.
 struct FlashcardSessionView: View {
     
     // MARK: - Environment
@@ -33,44 +27,49 @@ struct FlashcardSessionView: View {
     
     // MARK: - Properties
     
-    /// The source of words for this session.
     let source: StudySource
-    
-    /// Whether to only show learning words (not mastered).
     let learningOnly: Bool
     
     // MARK: - State
     
     @State private var showingExitConfirmation = false
+    @State private var hasAppeared = false
     
     // MARK: - Body
     
     var body: some View {
         NavigationStack {
-            Group {
-                if studyVM.showSessionComplete {
-                    // Session complete view
-                    SessionCompleteView(result: studyVM.lastSessionResult) {
-                        dismiss()
+            ZStack {
+                // Background
+                AppColors.groupedBackground
+                    .ignoresSafeArea()
+                
+                Group {
+                    if studyVM.showSessionComplete {
+                        SessionCompleteContentView(result: studyVM.lastSessionResult) {
+                            dismiss()
+                        }
+                    } else if studyVM.studyWords.isEmpty {
+                        emptyStateView
+                    } else {
+                        flashcardContent
                     }
-                } else if studyVM.studyWords.isEmpty {
-                    // Empty state
-                    emptyStateView
-                } else {
-                    // Main flashcard view
-                    flashcardContent
                 }
             }
             .navigationTitle("Flashcards")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Exit") {
+                    Button {
                         if studyVM.isSessionActive {
                             showingExitConfirmation = true
                         } else {
                             dismiss()
                         }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
                     }
                 }
             }
@@ -79,171 +78,179 @@ struct FlashcardSessionView: View {
                     studyVM.endSession()
                     dismiss()
                 }
-                Button("Continue Studying", role: .cancel) { }
+                Button("Continue", role: .cancel) { }
             } message: {
-                Text("Your progress will be saved. You've reviewed \(studyVM.currentIndex + 1) of \(studyVM.studyWords.count) words.")
+                Text("You've reviewed \(studyVM.currentIndex + 1) of \(studyVM.studyWords.count) words.")
             }
             .onAppear {
                 startSession()
+                withAnimation(AppAnimation.spring.delay(0.1)) {
+                    hasAppeared = true
+                }
             }
         }
     }
     
-    // MARK: - View Components
+    // MARK: - Empty State
     
-    /// Empty state when no words available.
     private var emptyStateView: some View {
-        VStack(spacing: 24) {
-            Image(systemName: "rectangle.on.rectangle.slash")
-                .font(.system(size: 64))
-                .foregroundStyle(.secondary)
-            
-            Text("No Words to Study")
-                .font(.title2)
-                .fontWeight(.bold)
-            
-            Text("Add some vocabulary words first, then come back to study!")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
-            
-            Button("Go Back") {
-                dismiss()
+        VStack(spacing: AppSpacing.xl) {
+            ZStack {
+                Circle()
+                    .fill(AppColors.tanDark.opacity(0.5))
+                    .frame(width: 120, height: 120)
+                
+                Image(systemName: "rectangle.on.rectangle.slash")
+                    .font(.system(size: 48))
+                    .foregroundStyle(AppColors.primary)
             }
-            .buttonStyle(.borderedProminent)
+            
+            VStack(spacing: AppSpacing.sm) {
+                Text("No Words to Study")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                
+                Text("Add some vocabulary words first,\nthen come back to study!")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            
+            Button {
+                dismiss()
+            } label: {
+                Text("Go Back")
+            }
+            .buttonStyle(.primary)
+            .padding(.horizontal, AppSpacing.xxxl)
         }
-        .padding()
+        .padding(AppSpacing.xl)
     }
     
-    /// Main flashcard content with card and controls.
+    // MARK: - Flashcard Content
+    
     private var flashcardContent: some View {
         VStack(spacing: 0) {
-            // Progress bar
+            // Progress header
             progressHeader
             
             Spacer()
             
             // Flashcard
             if let word = studyVM.currentWord {
-                FlashcardCard(
+                FlashcardCardView(
                     word: word,
                     isFlipped: studyVM.isFlipped,
                     onTap: { studyVM.flipCard() },
                     onSwipeLeft: { studyVM.skipCurrentWord() },
                     onSwipeRight: { studyVM.markCurrentAsMastered() }
                 )
-                .padding(.horizontal, 24)
+                .padding(.horizontal, AppSpacing.xl)
+                .opacity(hasAppeared ? 1 : 0)
+                .offset(y: hasAppeared ? 0 : 30)
             }
             
             Spacer()
             
-            // Hint text
-            hintText
+            // Hint
+            Text(studyVM.isFlipped ? "Swipe or use buttons below" : "Tap to reveal")
+                .font(.subheadline)
+                .foregroundStyle(.tertiary)
+                .padding(.bottom, AppSpacing.md)
             
             // Control buttons
             controlButtons
         }
-        .background(Color(.systemGroupedBackground))
     }
     
-    /// Progress header showing session progress.
+    // MARK: - Progress Header
+    
     private var progressHeader: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: AppSpacing.sm) {
             // Progress bar
-            ProgressView(value: studyVM.sessionProgress)
-                .tint(.blue)
-                .padding(.horizontal)
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.white.opacity(0.3))
+                    
+                    Capsule()
+                        .fill(AppColors.primary)
+                        .frame(width: geo.size.width * studyVM.sessionProgress)
+                        .animation(AppAnimation.smooth, value: studyVM.sessionProgress)
+                }
+            }
+            .frame(height: 6)
+            .padding(.horizontal, AppSpacing.horizontalPadding)
             
-            // Progress text
+            // Stats row
             HStack {
                 Text(studyVM.progressText)
-                    .font(.caption)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
                     .foregroundStyle(.secondary)
                 
                 Spacer()
                 
-                // Mastered count
-                HStack(spacing: 4) {
+                HStack(spacing: AppSpacing.xs) {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                    Text("\(studyVM.sessionMasteredWords.count) mastered")
+                        .foregroundStyle(AppColors.success)
+                    Text("\(studyVM.sessionMasteredWords.count)")
+                        .fontWeight(.semibold)
                 }
-                .font(.caption)
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
             }
-            .padding(.horizontal)
+            .padding(.horizontal, AppSpacing.horizontalPadding)
         }
-        .padding(.vertical, 12)
-        .background(Color(.systemBackground))
+        .padding(.vertical, AppSpacing.md)
+        .background(.ultraThinMaterial)
     }
     
-    /// Hint text below the card.
-    private var hintText: some View {
-        Text(studyVM.isFlipped ? "Swipe or tap buttons below" : "Tap card to flip")
-            .font(.caption)
-            .foregroundStyle(.tertiary)
-            .padding(.bottom, 8)
-    }
+    // MARK: - Control Buttons
     
-    /// Control buttons for navigation.
     private var controlButtons: some View {
-        HStack(spacing: 40) {
-            // Skip button (swipe left alternative)
-            Button {
-                withAnimation(.spring(response: 0.3)) {
+        HStack(spacing: AppSpacing.xl) {
+            // Skip
+            ControlButton(
+                icon: "xmark",
+                label: "Skip",
+                color: AppColors.warning
+            ) {
+                withAnimation(AppAnimation.spring) {
                     studyVM.skipCurrentWord()
                 }
-            } label: {
-                VStack(spacing: 4) {
-                    Image(systemName: "arrow.left.circle.fill")
-                        .font(.system(size: 48))
-                        .foregroundStyle(.orange)
-                    Text("Skip")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
             }
             
-            // Flip button
-            Button {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+            // Flip
+            ControlButton(
+                icon: "arrow.triangle.2.circlepath",
+                label: "Flip",
+                color: .blue,
+                isLarge: true
+            ) {
+                withAnimation(AppAnimation.spring) {
                     studyVM.flipCard()
                 }
-            } label: {
-                VStack(spacing: 4) {
-                    Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
-                        .font(.system(size: 48))
-                        .foregroundStyle(.blue)
-                    Text("Flip")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
             }
             
-            // Mastered button (swipe right alternative)
-            Button {
-                withAnimation(.spring(response: 0.3)) {
+            // Mastered
+            ControlButton(
+                icon: "checkmark",
+                label: "Got it",
+                color: AppColors.success
+            ) {
+                withAnimation(AppAnimation.spring) {
                     studyVM.markCurrentAsMastered()
-                }
-            } label: {
-                VStack(spacing: 4) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 48))
-                        .foregroundStyle(.green)
-                    Text("Mastered")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
             }
         }
-        .padding(.vertical, 24)
-        .background(Color(.systemBackground))
+        .padding(.vertical, AppSpacing.lg)
+        .padding(.horizontal, AppSpacing.xl)
+        .background(.ultraThinMaterial)
     }
     
     // MARK: - Actions
     
-    /// Starts the flashcard session.
     private func startSession() {
         studyVM.vocabViewModel = vocabViewModel
         
@@ -260,131 +267,188 @@ struct FlashcardSessionView: View {
     }
 }
 
-// MARK: - Flashcard Card
+// MARK: - Control Button
 
-/// A single flashcard with flip animation and swipe gestures.
-struct FlashcardCard: View {
+struct ControlButton: View {
+    let icon: String
+    let label: String
+    let color: Color
+    var isLarge: Bool = false
+    let action: () -> Void
     
-    // MARK: - Properties
+    @State private var isPressed = false
     
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: AppSpacing.xs) {
+                ZStack {
+                    Circle()
+                        .fill(color.opacity(0.15))
+                        .frame(width: isLarge ? 64 : 52, height: isLarge ? 64 : 52)
+                    
+                    Image(systemName: icon)
+                        .font(isLarge ? .title2 : .body)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(color)
+                }
+                
+                Text(label)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .buttonStyle(.plain)
+        .scaleEffect(isPressed ? 0.9 : 1.0)
+        .animation(AppAnimation.quick, value: isPressed)
+        .onLongPressGesture(minimumDuration: .infinity, maximumDistance: .infinity) { } onPressingChanged: { pressing in
+            isPressed = pressing
+        }
+    }
+}
+
+// MARK: - Flashcard Card View
+
+struct FlashcardCardView: View {
     let word: VocabWord
     let isFlipped: Bool
     let onTap: () -> Void
     let onSwipeLeft: () -> Void
     let onSwipeRight: () -> Void
     
-    // MARK: - State
-    
     @State private var offset: CGSize = .zero
     @State private var rotation: Double = 0
     
-    // MARK: - Body
+    private var swipeProgress: Double {
+        Double(offset.width) / 150.0
+    }
     
     var body: some View {
         ZStack {
-            // Back of card (definition)
+            // Back (definition)
             cardBack
                 .opacity(isFlipped ? 1 : 0)
-                .rotation3DEffect(
-                    .degrees(isFlipped ? 0 : -180),
-                    axis: (x: 0, y: 1, z: 0)
-                )
+                .rotation3DEffect(.degrees(isFlipped ? 0 : -180), axis: (x: 0, y: 1, z: 0))
             
-            // Front of card (word)
+            // Front (word)
             cardFront
                 .opacity(isFlipped ? 0 : 1)
-                .rotation3DEffect(
-                    .degrees(isFlipped ? 180 : 0),
-                    axis: (x: 0, y: 1, z: 0)
-                )
+                .rotation3DEffect(.degrees(isFlipped ? 180 : 0), axis: (x: 0, y: 1, z: 0))
         }
-        .frame(height: 400)
+        .frame(height: 420)
         .offset(offset)
         .rotationEffect(.degrees(rotation))
         .gesture(
             DragGesture()
                 .onChanged { gesture in
                     offset = gesture.translation
-                    rotation = Double(gesture.translation.width / 20)
+                    rotation = Double(gesture.translation.width / 25)
                 }
                 .onEnded { gesture in
                     handleSwipe(gesture)
                 }
         )
         .onTapGesture {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+            withAnimation(AppAnimation.spring) {
                 onTap()
             }
         }
-        .animation(.spring(response: 0.3), value: offset)
-        .animation(.spring(response: 0.4, dampingFraction: 0.7), value: isFlipped)
+        .animation(AppAnimation.spring, value: offset)
+        .animation(AppAnimation.spring, value: isFlipped)
+        // Swipe indicator overlays
+        .overlay(alignment: .topLeading) {
+            if swipeProgress < -0.3 {
+                skipIndicator
+                    .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            if swipeProgress > 0.3 {
+                masteredIndicator
+                    .transition(.scale.combined(with: .opacity))
+            }
+        }
     }
     
-    // MARK: - Card Faces
+    // MARK: - Card Front
     
-    /// Front of the card showing the word.
     private var cardFront: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: AppSpacing.lg) {
             Spacer()
             
+            // Word
             Text(word.word)
                 .font(.system(size: 36, weight: .bold, design: .serif))
                 .multilineTextAlignment(.center)
+                .padding(.horizontal, AppSpacing.lg)
             
-            // Mastered badge if applicable
+            // Mastered badge
             if word.mastered {
-                Label("Mastered", systemImage: "checkmark.seal.fill")
-                    .font(.caption)
-                    .foregroundStyle(.green)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color.green.opacity(0.15))
-                    .clipShape(Capsule())
+                HStack(spacing: AppSpacing.xxs) {
+                    Image(systemName: "checkmark.seal.fill")
+                    Text("Mastered")
+                }
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundStyle(AppColors.success)
+                .padding(.horizontal, AppSpacing.md)
+                .padding(.vertical, AppSpacing.xs)
+                .background(AppColors.success.opacity(0.15))
+                .clipShape(Capsule())
             }
             
             Spacer()
             
             // Tap hint
-            HStack(spacing: 4) {
-                Image(systemName: "hand.tap")
-                Text("Tap to see definition")
+            HStack(spacing: AppSpacing.xs) {
+                Image(systemName: "hand.tap.fill")
+                Text("Tap to reveal")
             }
-            .font(.caption)
+            .font(.subheadline)
             .foregroundStyle(.tertiary)
-            .padding(.bottom, 24)
+            .padding(.bottom, AppSpacing.xl)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: 24)
-                .fill(Color(.systemBackground))
-                .shadow(color: .black.opacity(0.15), radius: 16, x: 0, y: 8)
+            RoundedRectangle(cornerRadius: AppRadius.extraLarge, style: .continuous)
+                .fill(AppColors.cardBackground)
+                .shadow(color: .black.opacity(0.12), radius: 24, x: 0, y: 12)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 24)
-                .stroke(Color.blue.opacity(0.3), lineWidth: 2)
+            RoundedRectangle(cornerRadius: AppRadius.extraLarge, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.5), Color.white.opacity(0.2)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: 1
+                )
         )
     }
     
-    /// Back of the card showing definition and details.
+    // MARK: - Card Back
+    
     private var cardBack: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                // Word header
+            VStack(alignment: .leading, spacing: AppSpacing.lg) {
+                // Header
                 HStack {
                     Text(word.word)
                         .font(.title2)
                         .fontWeight(.bold)
+                    
                     Spacer()
+                    
                     if word.mastered {
                         Image(systemName: "checkmark.seal.fill")
-                            .foregroundStyle(.green)
+                            .foregroundStyle(AppColors.success)
                     }
                 }
                 
                 Divider()
                 
                 // Definition
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: AppSpacing.xs) {
                     Label("Definition", systemImage: "text.book.closed")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -393,9 +457,9 @@ struct FlashcardCard: View {
                         .font(.body)
                 }
                 
-                // Example sentence
+                // Example
                 if !word.exampleSentence.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: AppSpacing.xs) {
                         Label("Example", systemImage: "text.quote")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -403,97 +467,105 @@ struct FlashcardCard: View {
                         Text("\"\(word.exampleSentence)\"")
                             .font(.body)
                             .italic()
-                            .foregroundStyle(.primary.opacity(0.8))
+                            .foregroundStyle(.secondary)
                     }
                 }
                 
                 // Synonyms
                 if !word.synonyms.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: AppSpacing.xs) {
                         Label("Synonyms", systemImage: "equal.circle")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         
-                        FlowLayout(spacing: 8) {
-                            ForEach(word.synonyms, id: \.self) { synonym in
-                                Text(synonym)
-                                    .font(.caption)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .background(Color.blue.opacity(0.1))
-                                    .clipShape(Capsule())
-                            }
-                        }
+                        FlowLayoutSimple(items: word.synonyms, color: .blue)
                     }
                 }
                 
                 // Antonyms
                 if !word.antonyms.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: AppSpacing.xs) {
                         Label("Antonyms", systemImage: "arrow.left.arrow.right.circle")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         
-                        FlowLayout(spacing: 8) {
-                            ForEach(word.antonyms, id: \.self) { antonym in
-                                Text(antonym)
-                                    .font(.caption)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .background(Color.orange.opacity(0.1))
-                                    .clipShape(Capsule())
-                            }
-                        }
+                        FlowLayoutSimple(items: word.antonyms, color: .orange)
                     }
                 }
-                
-                Spacer(minLength: 40)
             }
-            .padding(24)
+            .padding(AppSpacing.lg)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: 24)
-                .fill(Color(.systemBackground))
-                .shadow(color: .black.opacity(0.15), radius: 16, x: 0, y: 8)
+            RoundedRectangle(cornerRadius: AppRadius.extraLarge, style: .continuous)
+                .fill(AppColors.cardBackground)
+                .shadow(color: .black.opacity(0.12), radius: 24, x: 0, y: 12)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 24)
-                .stroke(Color.green.opacity(0.3), lineWidth: 2)
+            RoundedRectangle(cornerRadius: AppRadius.extraLarge, style: .continuous)
+                .stroke(AppColors.success.opacity(0.3), lineWidth: 2)
         )
     }
     
-    // MARK: - Gesture Handling
+    // MARK: - Indicators
     
-    /// Handles swipe gesture completion.
+    private var skipIndicator: some View {
+        HStack(spacing: AppSpacing.xxs) {
+            Image(systemName: "xmark")
+            Text("Skip")
+        }
+        .font(.caption)
+        .fontWeight(.bold)
+        .foregroundStyle(.white)
+        .padding(.horizontal, AppSpacing.md)
+        .padding(.vertical, AppSpacing.xs)
+        .background(AppColors.warning)
+        .clipShape(Capsule())
+        .padding(AppSpacing.md)
+    }
+    
+    private var masteredIndicator: some View {
+        HStack(spacing: AppSpacing.xxs) {
+            Image(systemName: "checkmark")
+            Text("Got it!")
+        }
+        .font(.caption)
+        .fontWeight(.bold)
+        .foregroundStyle(.white)
+        .padding(.horizontal, AppSpacing.md)
+        .padding(.vertical, AppSpacing.xs)
+        .background(AppColors.success)
+        .clipShape(Capsule())
+        .padding(AppSpacing.md)
+    }
+    
+    // MARK: - Swipe Handling
+    
     private func handleSwipe(_ gesture: DragGesture.Value) {
         let threshold: CGFloat = 100
         
         if gesture.translation.width > threshold {
-            // Swipe right - mark as mastered
-            logger.debug("🎴 Swiped right on '\(word.word)' - marking as mastered")
-            withAnimation(.spring(response: 0.3)) {
+            logger.debug("🎴 Swiped right - mastered")
+            withAnimation(AppAnimation.spring) {
                 offset = CGSize(width: 500, height: 0)
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                 onSwipeRight()
                 offset = .zero
                 rotation = 0
             }
         } else if gesture.translation.width < -threshold {
-            // Swipe left - skip
-            logger.debug("🎴 Swiped left on '\(word.word)' - skipping")
-            withAnimation(.spring(response: 0.3)) {
+            logger.debug("🎴 Swiped left - skip")
+            withAnimation(AppAnimation.spring) {
                 offset = CGSize(width: -500, height: 0)
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                 onSwipeLeft()
                 offset = .zero
                 rotation = 0
             }
         } else {
-            // Return to center
-            withAnimation(.spring(response: 0.3)) {
+            withAnimation(AppAnimation.spring) {
                 offset = .zero
                 rotation = 0
             }
@@ -501,149 +573,116 @@ struct FlashcardCard: View {
     }
 }
 
-// MARK: - Flow Layout
+// MARK: - Flow Layout Simple
 
-/// A layout that arranges views in a flowing manner.
-struct FlowLayout: Layout {
-    var spacing: CGFloat = 8
+struct FlowLayoutSimple: View {
+    let items: [String]
+    let color: Color
     
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let result = FlowResult(in: proposal.width ?? 0, spacing: spacing, subviews: subviews)
-        return CGSize(width: proposal.width ?? 0, height: result.height)
-    }
-    
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let result = FlowResult(in: bounds.width, spacing: spacing, subviews: subviews)
-        for (index, subview) in subviews.enumerated() {
-            let point = result.positions[index]
-            subview.place(at: CGPoint(x: bounds.minX + point.x, y: bounds.minY + point.y), proposal: .unspecified)
-        }
-    }
-    
-    struct FlowResult {
-        var positions: [CGPoint] = []
-        var height: CGFloat = 0
-        
-        init(in width: CGFloat, spacing: CGFloat, subviews: Subviews) {
-            var x: CGFloat = 0
-            var y: CGFloat = 0
-            var lineHeight: CGFloat = 0
-            
-            for subview in subviews {
-                let size = subview.sizeThatFits(.unspecified)
-                
-                if x + size.width > width && x > 0 {
-                    x = 0
-                    y += lineHeight + spacing
-                    lineHeight = 0
+    var body: some View {
+        // Simple horizontal scroll for pills
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(items, id: \.self) { item in
+                    Text(item)
+                        .font(.caption)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(color.opacity(0.12))
+                        .foregroundStyle(color)
+                        .clipShape(Capsule())
                 }
-                
-                positions.append(CGPoint(x: x, y: y))
-                lineHeight = max(lineHeight, size.height)
-                x += size.width + spacing
             }
-            
-            height = y + lineHeight
         }
     }
 }
 
-// MARK: - Session Complete View
+// MARK: - Session Complete Content View
 
-/// View shown when a study session is complete.
-struct SessionCompleteView: View {
-    
+struct SessionCompleteContentView: View {
     let result: StudySessionResult?
     let onDismiss: () -> Void
     
+    @State private var hasAppeared = false
+    
     var body: some View {
-        VStack(spacing: 32) {
-            // Celebration icon
-            Image(systemName: "party.popper.fill")
-                .font(.system(size: 80))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [.yellow, .orange],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+        VStack(spacing: AppSpacing.xxl) {
+            Spacer()
             
-            Text("Session Complete!")
-                .font(.largeTitle)
-                .fontWeight(.bold)
+            // Celebration
+            ZStack {
+                Circle()
+                    .fill(AppColors.tanDark.opacity(0.5))
+                    .frame(width: 140, height: 140)
+                    .scaleEffect(hasAppeared ? 1 : 0.5)
+                    .opacity(hasAppeared ? 1 : 0)
+                
+                Image(systemName: "party.popper.fill")
+                    .font(.system(size: 64))
+                    .foregroundStyle(AppColors.warning)
+                    .scaleEffect(hasAppeared ? 1 : 0)
+            }
             
+            VStack(spacing: AppSpacing.sm) {
+                Text("Session Complete!")
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+                
+                Text("Great job studying today!")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+            }
+            .opacity(hasAppeared ? 1 : 0)
+            .offset(y: hasAppeared ? 0 : 20)
+            
+            // Stats
             if let result = result {
-                // Stats grid
-                VStack(spacing: 16) {
-                    HStack(spacing: 32) {
-                        StatBadge(
-                            value: "\(result.totalQuestions)",
-                            label: "Reviewed",
-                            color: .blue
-                        )
-                        
-                        StatBadge(
-                            value: "\(result.masteredCount)",
-                            label: "Mastered",
-                            color: .green
-                        )
-                    }
-                    
-                    HStack(spacing: 32) {
-                        StatBadge(
-                            value: result.formattedDuration,
-                            label: "Time",
-                            color: .purple
-                        )
-                        
-                        StatBadge(
-                            value: "\(result.scorePercentage)%",
-                            label: "Score",
-                            color: .orange
-                        )
-                    }
+                HStack(spacing: AppSpacing.lg) {
+                    CompletionStat(value: "\(result.totalQuestions)", label: "Reviewed", color: .blue)
+                    CompletionStat(value: "\(result.masteredCount)", label: "Mastered", color: AppColors.success)
+                    CompletionStat(value: result.formattedDuration, label: "Time", color: .purple)
                 }
-                .padding()
-                .background(Color(.systemGray6))
-                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .padding(AppSpacing.lg)
+                .cardStyle()
+                .padding(.horizontal, AppSpacing.xl)
+                .opacity(hasAppeared ? 1 : 0)
+                .offset(y: hasAppeared ? 0 : 20)
             }
             
-            Button {
-                onDismiss()
-            } label: {
+            Spacer()
+            
+            Button(action: onDismiss) {
                 Text("Done")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding()
             }
-            .buttonStyle(.borderedProminent)
-            .padding(.horizontal, 32)
+            .buttonStyle(.primary)
+            .padding(.horizontal, AppSpacing.xl)
+            .padding(.bottom, AppSpacing.xl)
+            .opacity(hasAppeared ? 1 : 0)
         }
-        .padding()
+        .onAppear {
+            withAnimation(AppAnimation.bouncy.delay(0.1)) {
+                hasAppeared = true
+            }
+        }
     }
 }
 
-// MARK: - Stat Badge
-
-/// A badge displaying a statistic.
-struct StatBadge: View {
+struct CompletionStat: View {
     let value: String
     let label: String
     let color: Color
     
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: AppSpacing.xs) {
             Text(value)
-                .font(.title)
-                .fontWeight(.bold)
+                .font(.system(size: 24, weight: .bold, design: .rounded))
                 .foregroundStyle(color)
             
             Text(label)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        .frame(width: 100)
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -653,4 +692,3 @@ struct StatBadge: View {
     FlashcardSessionView(source: .allWords, learningOnly: false)
         .environmentObject(VocabViewModel())
 }
-

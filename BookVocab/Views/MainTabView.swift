@@ -2,58 +2,110 @@
 //  MainTabView.swift
 //  BookVocab
 //
-//  Main navigation container using TabView.
+//  Main navigation container with polished tab bar.
 //  Provides access to Home, All Words, and Study sections.
+//
+//  Features:
+//  - Clean tab bar design
+//  - Consistent SF Symbols
+//  - Gradient accent color
 //
 
 import SwiftUI
 
-/// The main tab-based navigation container for the app.
-/// Contains tabs for Home (Books), All Vocab Words, and Study Section.
 struct MainTabView: View {
     
     // MARK: - Environment
     
-    /// Access to the shared user session view model.
     @EnvironmentObject var session: UserSessionViewModel
-    
-    /// Access to the shared books view model.
     @EnvironmentObject var booksViewModel: BooksViewModel
-    
-    /// Access to the shared vocab view model.
     @EnvironmentObject var vocabViewModel: VocabViewModel
     
     // MARK: - State
     
-    /// Currently selected tab index.
-    @State private var selectedTab: Int = 0
+    @State private var selectedTab: Tab = .books
+    
+    enum Tab: Int, CaseIterable {
+        case books = 0
+        case words = 1
+        case study = 2
+        
+        var title: String {
+            switch self {
+            case .books: return "Library"
+            case .words: return "Words"
+            case .study: return "Study"
+            }
+        }
+        
+        var icon: String {
+            switch self {
+            case .books: return "books.vertical.fill"
+            case .words: return "textformat.abc"
+            case .study: return "brain.head.profile"
+            }
+        }
+    }
     
     // MARK: - Body
     
     var body: some View {
         TabView(selection: $selectedTab) {
-            // Home Tab - Book List
+            // Books tab
             HomeView()
                 .tabItem {
-                    Label("Books", systemImage: "book.fill")
+                    Label(Tab.books.title, systemImage: Tab.books.icon)
                 }
-                .tag(0)
+                .tag(Tab.books)
             
-            // All Vocab Words Tab
+            // Words tab
             AllVocabView()
                 .tabItem {
-                    Label("All Words", systemImage: "textformat.abc")
+                    Label(Tab.words.title, systemImage: Tab.words.icon)
                 }
-                .tag(1)
+                .tag(Tab.words)
             
-            // Study Section Tab
+            // Study tab
             StudyView()
                 .tabItem {
-                    Label("Study", systemImage: "brain.head.profile")
+                    Label(Tab.study.title, systemImage: Tab.study.icon)
                 }
-                .tag(2)
+                .tag(Tab.study)
         }
-        .tint(.blue)
+        .tint(AppColors.primary)
+        .onAppear {
+            // Configure tab bar appearance
+            configureTabBarAppearance()
+        }
+    }
+    
+    // MARK: - Tab Bar Appearance
+    
+    private func configureTabBarAppearance() {
+        let appearance = UITabBarAppearance()
+        appearance.configureWithDefaultBackground()
+        
+        // Tan background
+        appearance.backgroundColor = UIColor(AppColors.tan)
+        
+        // Selected item color - Black
+        let selectedColor = UIColor.black
+        appearance.stackedLayoutAppearance.selected.iconColor = selectedColor
+        appearance.stackedLayoutAppearance.selected.titleTextAttributes = [
+            .foregroundColor: selectedColor,
+            .font: UIFont.systemFont(ofSize: 10, weight: .semibold)
+        ]
+        
+        // Unselected item color
+        let normalColor = UIColor.secondaryLabel
+        appearance.stackedLayoutAppearance.normal.iconColor = normalColor
+        appearance.stackedLayoutAppearance.normal.titleTextAttributes = [
+            .foregroundColor: normalColor,
+            .font: UIFont.systemFont(ofSize: 10, weight: .medium)
+        ]
+        
+        UITabBar.appearance().standardAppearance = appearance
+        UITabBar.appearance().scrollEdgeAppearance = appearance
     }
 }
 

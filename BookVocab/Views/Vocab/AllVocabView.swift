@@ -2,45 +2,39 @@
 //  AllVocabView.swift
 //  BookVocab
 //
-//  Global view showing all vocabulary words across all books.
-//  Provides filtering, searching, and management capabilities.
+//  Premium view showing all vocabulary words across all books.
+//  Clean design with stats header, filters, and word cards.
+//
+//  Features:
+//  - Stats header with progress
+//  - Filter and sort options
+//  - Expandable word cards
+//  - Smooth animations
 //
 
 import SwiftUI
 
-/// View displaying all vocabulary words from all books.
-/// Supports searching, filtering by mastery status, and sorting.
 struct AllVocabView: View {
     
     // MARK: - Environment
     
-    /// Access to the shared vocab view model.
     @EnvironmentObject var vocabViewModel: VocabViewModel
-    
-    /// Access to the shared books view model.
     @EnvironmentObject var booksViewModel: BooksViewModel
     
     // MARK: - State
     
-    /// Search text for filtering words.
     @State private var searchText: String = ""
-    
-    /// Current filter selection.
     @State private var selectedFilter: WordFilter = .all
-    
-    /// Current sort order.
     @State private var sortOrder: SortOrder = .newest
+    @State private var hasAppeared: Bool = false
+    @State private var showingAddWord: Bool = false
     
-    // MARK: - Enums
-    
-    /// Filter options for the word list.
     enum WordFilter: String, CaseIterable {
         case all = "All"
         case learning = "Learning"
         case mastered = "Mastered"
     }
     
-    /// Sort options for the word list.
     enum SortOrder: String, CaseIterable {
         case newest = "Newest"
         case oldest = "Oldest"
@@ -49,11 +43,9 @@ struct AllVocabView: View {
     
     // MARK: - Computed Properties
     
-    /// Words filtered and sorted based on current selections.
     private var displayedWords: [VocabWord] {
         var words = vocabViewModel.allWords
         
-        // Apply search filter
         if !searchText.isEmpty {
             words = words.filter { word in
                 word.word.localizedCaseInsensitiveContains(searchText) ||
@@ -61,171 +53,289 @@ struct AllVocabView: View {
             }
         }
         
-        // Apply status filter
         switch selectedFilter {
-        case .all:
-            break
-        case .learning:
-            words = words.filter { !$0.mastered }
-        case .mastered:
-            words = words.filter { $0.mastered }
+        case .all: break
+        case .learning: words = words.filter { !$0.mastered }
+        case .mastered: words = words.filter { $0.mastered }
         }
         
-        // Apply sort
         switch sortOrder {
-        case .newest:
-            words = words.sorted { $0.createdAt > $1.createdAt }
-        case .oldest:
-            words = words.sorted { $0.createdAt < $1.createdAt }
-        case .alphabetical:
-            words = words.sorted { $0.word.lowercased() < $1.word.lowercased() }
+        case .newest: words = words.sorted { $0.createdAt > $1.createdAt }
+        case .oldest: words = words.sorted { $0.createdAt < $1.createdAt }
+        case .alphabetical: words = words.sorted { $0.word.lowercased() < $1.word.lowercased() }
         }
         
         return words
+    }
+    
+    private var progress: Double {
+        guard vocabViewModel.totalWordCount > 0 else { return 0 }
+        return Double(vocabViewModel.masteredCount) / Double(vocabViewModel.totalWordCount)
     }
     
     // MARK: - Body
     
     var body: some View {
         NavigationStack {
-            Group {
-                if vocabViewModel.allWords.isEmpty {
-                    emptyStateView
-                } else {
-                    wordListView
+            ScrollView {
+                VStack(spacing: 0) {
+                    if vocabViewModel.allWords.isEmpty {
+                        emptyStateView
+                            .padding(.top, AppSpacing.xxxl)
+                    } else {
+                        // Stats header
+                        statsHeader
+                            .padding(.horizontal, AppSpacing.horizontalPadding)
+                            .padding(.top, AppSpacing.md)
+                        
+                        // Filters
+                        filterSection
+                            .padding(.top, AppSpacing.lg)
+                        
+                        // Words list
+                        wordsSection
+                            .padding(.top, AppSpacing.md)
+                    }
                 }
+                .padding(.bottom, AppSpacing.xxxl)
             }
+            .background(AppColors.groupedBackground)
             .navigationTitle("All Words")
             .searchable(text: $searchText, prompt: "Search words...")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    filterMenu
+                    HStack(spacing: AppSpacing.sm) {
+                        // Add Word button
+                        Button {
+                            showingAddWord = true
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.title3)
+                        }
+                        
+                        // Sort menu
+                        sortMenu
+                    }
                 }
+            }
+            .sheet(isPresented: $showingAddWord) {
+                AddVocabView()
             }
             .refreshable {
                 await vocabViewModel.fetchAllWords()
             }
         }
-    }
-    
-    // MARK: - View Components
-    
-    /// Empty state when no words exist.
-    private var emptyStateView: some View {
-        ContentUnavailableView {
-            Label("No Words Yet", systemImage: "textformat.abc")
-        } description: {
-            Text("Add vocabulary words from your books to see them here.")
-        }
-    }
-    
-    /// Main list of vocabulary words.
-    private var wordListView: some View {
-        List {
-            // Stats header
-            statsHeader
-            
-            // Filter pills
-            filterPills
-            
-            // Word list
-            Section {
-                ForEach(displayedWords) { word in
-                    AllVocabRowView(word: word, bookTitle: bookTitle(for: word))
-                }
-                .onDelete { offsets in
-                    deleteWords(at: offsets)
-                }
-            } header: {
-                Text("\(displayedWords.count) words")
+        .onAppear {
+            withAnimation(AppAnimation.spring.delay(0.1)) {
+                hasAppeared = true
             }
         }
-        .listStyle(.insetGrouped)
     }
     
-    /// Statistics header showing word counts.
+    // MARK: - Stats Header
+    
     private var statsHeader: some View {
-        Section {
+        HStack(spacing: AppSpacing.lg) {
+            // Progress ring
+            ZStack {
+                Circle()
+                    .stroke(Color.gray.opacity(0.15), lineWidth: 8)
+                
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(
+                        AppColors.greenGradient,
+                        style: StrokeStyle(lineWidth: 8, lineCap: .round)
+                    )
+                    .rotationEffect(.degrees(-90))
+                    .animation(AppAnimation.smooth, value: progress)
+                
+                VStack(spacing: 0) {
+                    Text("\(Int(progress * 100))%")
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                    Text("done")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: 70, height: 70)
+            
+            // Stats
             HStack(spacing: 0) {
-                StatPill(
-                    count: vocabViewModel.totalWordCount,
-                    label: "Total",
-                    color: .blue
-                )
-                
-                Divider()
-                    .frame(height: 40)
-                
-                StatPill(
-                    count: vocabViewModel.learningWords.count,
-                    label: "Learning",
-                    color: .orange
-                )
-                
-                Divider()
-                    .frame(height: 40)
-                
-                StatPill(
-                    count: vocabViewModel.masteredCount,
-                    label: "Mastered",
-                    color: .green
-                )
-            }
-        }
-    }
-    
-    /// Horizontal filter pills.
-    private var filterPills: some View {
-        Section {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack {
-                    ForEach(WordFilter.allCases, id: \.self) { filter in
-                        FilterPill(
-                            title: filter.rawValue,
-                            isSelected: selectedFilter == filter
-                        ) {
-                            withAnimation {
-                                selectedFilter = filter
-                            }
-                        }
-                    }
-                    
-                    Divider()
-                        .frame(height: 24)
-                    
-                    ForEach(SortOrder.allCases, id: \.self) { order in
-                        FilterPill(
-                            title: order.rawValue,
-                            isSelected: sortOrder == order
-                        ) {
-                            withAnimation {
-                                sortOrder = order
-                            }
-                        }
-                    }
+                VStack(spacing: 2) {
+                    Text("\(vocabViewModel.totalWordCount)")
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .foregroundStyle(.blue)
+                    Text("Total")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
+                .frame(maxWidth: .infinity)
+                
+                Rectangle()
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(width: 1, height: 40)
+                
+                VStack(spacing: 2) {
+                    Text("\(vocabViewModel.masteredCount)")
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .foregroundStyle(AppColors.success)
+                    Text("Mastered")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                
+                Rectangle()
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(width: 1, height: 40)
+                
+                VStack(spacing: 2) {
+                    Text("\(vocabViewModel.learningWords.count)")
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .foregroundStyle(AppColors.warning)
+                    Text("Learning")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
             }
         }
+        .padding(AppSpacing.md)
+        .cardStyle()
+        .opacity(hasAppeared ? 1 : 0)
+        .offset(y: hasAppeared ? 0 : 20)
     }
     
-    /// Menu for filter options.
-    private var filterMenu: some View {
-        Menu {
-            Section("Filter") {
+    // MARK: - Filter Section
+    
+    private var filterSection: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: AppSpacing.xs) {
                 ForEach(WordFilter.allCases, id: \.self) { filter in
-                    Button {
-                        selectedFilter = filter
-                    } label: {
-                        if selectedFilter == filter {
-                            Label(filter.rawValue, systemImage: "checkmark")
-                        } else {
-                            Text(filter.rawValue)
+                    FilterChip(
+                        title: filter.rawValue,
+                        isSelected: selectedFilter == filter,
+                        count: countForFilter(filter)
+                    ) {
+                        withAnimation(AppAnimation.spring) {
+                            selectedFilter = filter
                         }
                     }
                 }
+            }
+            .padding(.horizontal, AppSpacing.horizontalPadding)
+        }
+    }
+    
+    private func countForFilter(_ filter: WordFilter) -> Int {
+        switch filter {
+        case .all: return vocabViewModel.totalWordCount
+        case .learning: return vocabViewModel.learningWords.count
+        case .mastered: return vocabViewModel.masteredCount
+        }
+    }
+    
+    // MARK: - Words Section
+    
+    private var wordsSection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            // Header
+            HStack {
+                Text("Words")
+                    .font(.title3)
+                    .fontWeight(.bold)
+                
+                Spacer()
+                
+                Text("\(displayedWords.count) words")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, AppSpacing.horizontalPadding)
+            
+            // Words
+            if displayedWords.isEmpty {
+                noResultsView
+            } else {
+                LazyVStack(spacing: AppSpacing.sm) {
+                    ForEach(Array(displayedWords.enumerated()), id: \.element.id) { index, word in
+                        AllWordsCardView(
+                            word: word,
+                            bookTitle: bookTitle(for: word)
+                        )
+                        .opacity(hasAppeared ? 1 : 0)
+                        .offset(y: hasAppeared ? 0 : 20)
+                        .animation(
+                            AppAnimation.spring.delay(Double(index) * 0.02),
+                            value: hasAppeared
+                        )
+                    }
+                }
+                .padding(.horizontal, AppSpacing.horizontalPadding)
+            }
+        }
+    }
+    
+    private var noResultsView: some View {
+        VStack(spacing: AppSpacing.md) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 36))
+                .foregroundStyle(.tertiary)
+            
+            Text("No words found")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+            
+            Text("Try adjusting your search or filters")
+                .font(.subheadline)
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, AppSpacing.xxxl)
+    }
+    
+    // MARK: - Empty State
+    
+    private var emptyStateView: some View {
+        VStack(spacing: AppSpacing.xl) {
+            ZStack {
+                Circle()
+                    .fill(AppColors.tanDark.opacity(0.5))
+                    .frame(width: 140, height: 140)
+                
+                Image(systemName: "textformat.abc")
+                    .font(.system(size: 56))
+                    .foregroundStyle(AppColors.primary)
             }
             
-            Section("Sort") {
+            VStack(spacing: AppSpacing.sm) {
+                Text("No Words Yet")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                
+                Text("Add vocabulary words from your\nbooks or create global words.")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            
+            Button {
+                showingAddWord = true
+            } label: {
+                Label("Add Your First Word", systemImage: "plus.circle.fill")
+            }
+            .buttonStyle(.primary)
+            .padding(.horizontal, AppSpacing.xxxl)
+        }
+        .padding(AppSpacing.xl)
+    }
+    
+    // MARK: - Toolbar
+    
+    private var sortMenu: some View {
+        Menu {
+            Section("Sort by") {
                 ForEach(SortOrder.allCases, id: \.self) { order in
                     Button {
                         sortOrder = order
@@ -239,140 +349,150 @@ struct AllVocabView: View {
                 }
             }
         } label: {
-            Image(systemName: "line.3.horizontal.decrease.circle")
+            Image(systemName: "arrow.up.arrow.down.circle")
+                .font(.title3)
         }
     }
     
-    // MARK: - Helper Methods
+    // MARK: - Helpers
     
-    /// Gets the book title for a word.
+    /// Returns the book title for a word, or "All Words" if the word is global (no book assigned).
     private func bookTitle(for word: VocabWord) -> String {
-        booksViewModel.books.first { $0.id == word.bookId }?.title ?? "Unknown Book"
-    }
-    
-    /// Deletes words at the specified offsets.
-    private func deleteWords(at offsets: IndexSet) {
-        Task {
-            for index in offsets {
-                let word = displayedWords[index]
-                await vocabViewModel.deleteWord(word)
-            }
+        guard let bookId = word.bookId else {
+            return "All Words"
         }
+        return booksViewModel.books.first { $0.id == bookId }?.title ?? "Unknown"
     }
 }
 
-// MARK: - Stat Pill
+// MARK: - All Words Card View
 
-/// A pill showing a count statistic.
-struct StatPill: View {
-    let count: Int
-    let label: String
-    let color: Color
-    
-    var body: some View {
-        VStack(spacing: 4) {
-            Text("\(count)")
-                .font(.title2)
-                .fontWeight(.bold)
-                .foregroundStyle(color)
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-    }
-}
-
-// MARK: - Filter Pill
-
-/// A selectable filter pill button.
-struct FilterPill: View {
-    let title: String
-    let isSelected: Bool
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.caption)
-                .fontWeight(isSelected ? .semibold : .regular)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(isSelected ? Color.blue : Color.gray.opacity(0.2))
-                .foregroundStyle(isSelected ? .white : .primary)
-                .clipShape(Capsule())
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-// MARK: - All Vocab Row View
-
-/// A row in the all words list showing word and book info.
-struct AllVocabRowView: View {
-    
+struct AllWordsCardView: View {
     let word: VocabWord
     let bookTitle: String
     
-    /// Access to vocab view model for actions.
     @EnvironmentObject var vocabViewModel: VocabViewModel
-    
-    /// Controls expansion of word details.
     @State private var isExpanded: Bool = false
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Word header
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(word.word)
-                        .font(.headline)
+        VStack(alignment: .leading, spacing: 0) {
+            // Main row
+            HStack(alignment: .top, spacing: AppSpacing.md) {
+                VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                    HStack(spacing: AppSpacing.xs) {
+                        Text(word.word)
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                        
+                        if word.mastered {
+                            Image(systemName: "checkmark.seal.fill")
+                                .font(.caption)
+                                .foregroundStyle(AppColors.success)
+                        }
+                    }
                     
-                    Text(bookTitle)
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
+                    HStack(spacing: AppSpacing.xxs) {
+                        Image(systemName: bookTitle == "All Words" ? "tray.full" : "book.closed.fill")
+                            .font(.caption2)
+                        Text(bookTitle)
+                            .font(.caption)
+                    }
+                    .foregroundStyle(.tertiary)
+                    
+                    Text(word.definition)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(isExpanded ? nil : 2)
+                        .padding(.top, 2)
                 }
                 
                 Spacer()
                 
-                // Mastered indicator
                 Button {
                     Task {
                         await vocabViewModel.toggleMastered(word)
                     }
                 } label: {
                     Image(systemName: word.mastered ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(word.mastered ? .green : .gray)
+                        .font(.title2)
+                        .foregroundStyle(word.mastered ? AppColors.success : Color.gray.opacity(0.3))
                 }
                 .buttonStyle(.plain)
             }
             
-            // Definition
-            Text(word.definition)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            
-            // Expandable details
+            // Expanded content
             if isExpanded {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: AppSpacing.md) {
+                    Divider()
+                        .padding(.vertical, AppSpacing.sm)
+                    
+                    if !word.exampleSentence.isEmpty {
+                        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                            Label("Example", systemImage: "text.quote")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            
+                            Text("\"\(word.exampleSentence)\"")
+                                .font(.subheadline)
+                                .italic()
+                        }
+                    }
+                    
                     if !word.synonyms.isEmpty {
-                        DetailRow(label: "Synonyms", value: word.synonyms.joined(separator: ", "))
+                        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                            Label("Synonyms", systemImage: "equal.circle")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            
+                            FlexibleView(data: word.synonyms, spacing: 6, alignment: .leading) { syn in
+                                Text(syn)
+                                    .font(.caption)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(Color.blue.opacity(0.1))
+                                    .foregroundStyle(.blue)
+                                    .clipShape(Capsule())
+                            }
+                        }
                     }
                     
                     if !word.antonyms.isEmpty {
-                        DetailRow(label: "Antonyms", value: word.antonyms.joined(separator: ", "))
-                    }
-                    
-                    if !word.exampleSentence.isEmpty {
-                        DetailRow(label: "Example", value: word.exampleSentence)
+                        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                            Label("Antonyms", systemImage: "arrow.left.arrow.right.circle")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            
+                            FlexibleView(data: word.antonyms, spacing: 6, alignment: .leading) { ant in
+                                Text(ant)
+                                    .font(.caption)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(Color.orange.opacity(0.1))
+                                    .foregroundStyle(.orange)
+                                    .clipShape(Capsule())
+                            }
+                        }
                     }
                 }
-                .padding(.top, 4)
             }
+            
+            // Expand indicator
+            HStack {
+                Spacer()
+                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                Spacer()
+            }
+            .padding(.top, AppSpacing.xs)
         }
+        .padding(AppSpacing.md)
+        .background(AppColors.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
+        .shadow(color: .black.opacity(0.04), radius: 8, x: 0, y: 2)
         .contentShape(Rectangle())
         .onTapGesture {
-            withAnimation {
+            withAnimation(AppAnimation.spring) {
                 isExpanded.toggle()
             }
         }
@@ -386,4 +506,3 @@ struct AllVocabRowView: View {
         .environmentObject(VocabViewModel())
         .environmentObject(BooksViewModel())
 }
-

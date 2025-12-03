@@ -2,26 +2,21 @@
 //  QuizView.swift
 //  BookVocab
 //
-//  Quiz study mode with multiple choice and fill-in-the-blank formats.
-//  Tests user knowledge and provides immediate feedback.
+//  Premium quiz study mode with multiple choice and fill-in-blank.
+//  Beautiful feedback animations and score tracking.
 //
 //  Features:
 //  - Multiple choice questions
 //  - Fill-in-the-blank questions
-//  - Immediate feedback on answers
-//  - Session score tracking
-//  - Review of incorrect answers
+//  - Animated feedback
+//  - Score summary
 //
 
 import SwiftUI
 import os.log
 
-/// Logger for QuizView debugging
 private let logger = Logger(subsystem: "com.bookvocab.app", category: "QuizView")
 
-// MARK: - Quiz Session View
-
-/// Main view for quiz study sessions.
 struct QuizSessionView: View {
     
     // MARK: - Environment
@@ -32,10 +27,7 @@ struct QuizSessionView: View {
     
     // MARK: - Properties
     
-    /// The source of words for this quiz.
     let source: StudySource
-    
-    /// The type of quiz (multiple choice or fill in blank).
     let quizMode: StudyMode
     
     // MARK: - State
@@ -44,38 +36,46 @@ struct QuizSessionView: View {
     @State private var selectedAnswer: String? = nil
     @State private var showingFeedback = false
     @State private var userInput = ""
+    @State private var hasAppeared = false
     
     // MARK: - Body
     
     var body: some View {
         NavigationStack {
-            Group {
-                if studyVM.showSessionComplete {
-                    // Quiz complete view
-                    QuizCompleteView(
-                        result: studyVM.lastSessionResult,
-                        questions: studyVM.quizQuestions
-                    ) {
-                        dismiss()
+            ZStack {
+                // Background
+                AppColors.groupedBackground
+                    .ignoresSafeArea()
+                
+                Group {
+                    if studyVM.showSessionComplete {
+                        QuizCompleteContentView(
+                            result: studyVM.lastSessionResult,
+                            questions: studyVM.quizQuestions
+                        ) {
+                            dismiss()
+                        }
+                    } else if studyVM.quizQuestions.isEmpty {
+                        emptyStateView
+                    } else {
+                        quizContent
                     }
-                } else if studyVM.quizQuestions.isEmpty {
-                    // Empty state
-                    emptyStateView
-                } else {
-                    // Main quiz view
-                    quizContent
                 }
             }
-            .navigationTitle(quizMode == .multipleChoice ? "Multiple Choice" : "Fill in the Blank")
+            .navigationTitle(quizMode == .multipleChoice ? "Quiz" : "Fill in Blank")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Exit") {
+                    Button {
                         if studyVM.isSessionActive {
                             showingExitConfirmation = true
                         } else {
                             dismiss()
                         }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
                     }
                 }
             }
@@ -84,69 +84,81 @@ struct QuizSessionView: View {
                     studyVM.endSession()
                     dismiss()
                 }
-                Button("Continue Quiz", role: .cancel) { }
+                Button("Continue", role: .cancel) { }
             } message: {
-                Text("Your progress will be lost. You've answered \(studyVM.currentQuestionIndex) of \(studyVM.quizQuestions.count) questions.")
+                Text("You've answered \(studyVM.currentQuestionIndex) of \(studyVM.quizQuestions.count) questions.")
             }
             .onAppear {
                 startQuiz()
+                withAnimation(AppAnimation.spring.delay(0.1)) {
+                    hasAppeared = true
+                }
             }
         }
     }
     
-    // MARK: - View Components
+    // MARK: - Empty State
     
-    /// Empty state when no words available.
     private var emptyStateView: some View {
-        VStack(spacing: 24) {
-            Image(systemName: "questionmark.circle")
-                .font(.system(size: 64))
-                .foregroundStyle(.secondary)
-            
-            Text("Not Enough Words")
-                .font(.title2)
-                .fontWeight(.bold)
-            
-            Text("You need at least 4 vocabulary words to take a quiz. Add more words first!")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
-            
-            Button("Go Back") {
-                dismiss()
+        VStack(spacing: AppSpacing.xl) {
+            ZStack {
+                Circle()
+                    .fill(AppColors.tanDark.opacity(0.5))
+                    .frame(width: 120, height: 120)
+                
+                Image(systemName: "questionmark.circle")
+                    .font(.system(size: 48))
+                    .foregroundStyle(AppColors.primary)
             }
-            .buttonStyle(.borderedProminent)
+            
+            VStack(spacing: AppSpacing.sm) {
+                Text("Not Enough Words")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                
+                Text("You need at least 4 words to take a quiz.\nAdd more vocabulary first!")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            
+            Button {
+                dismiss()
+            } label: {
+                Text("Go Back")
+            }
+            .buttonStyle(.primary)
+            .padding(.horizontal, AppSpacing.xxxl)
         }
-        .padding()
+        .padding(AppSpacing.xl)
     }
     
-    /// Main quiz content.
+    // MARK: - Quiz Content
+    
     private var quizContent: some View {
         VStack(spacing: 0) {
             // Progress header
             quizProgressHeader
             
-            // Question content
+            // Question
             if let question = studyVM.currentQuestion {
                 ScrollView {
-                    VStack(spacing: 24) {
-                        // Question card
+                    VStack(spacing: AppSpacing.lg) {
                         questionCard(question)
+                            .padding(.top, AppSpacing.lg)
                         
-                        // Answer section
                         if quizMode == .multipleChoice {
-                            multipleChoiceAnswers(question)
+                            multipleChoiceOptions(question)
                         } else {
-                            fillInBlankAnswer(question)
+                            fillInBlankInput(question)
                         }
                         
-                        // Feedback (shown after answering)
                         if showingFeedback {
                             feedbackCard(question)
                         }
                     }
-                    .padding()
+                    .padding(.horizontal, AppSpacing.horizontalPadding)
+                    .padding(.bottom, 100)
                 }
                 
                 // Next button
@@ -155,52 +167,61 @@ struct QuizSessionView: View {
                 }
             }
         }
-        .background(Color(.systemGroupedBackground))
     }
     
-    /// Progress header for quiz.
+    // MARK: - Progress Header
+    
     private var quizProgressHeader: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: AppSpacing.sm) {
             // Progress bar
-            ProgressView(value: studyVM.quizProgress)
-                .tint(.purple)
-                .padding(.horizontal)
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.white.opacity(0.3))
+                    
+                    Capsule()
+                        .fill(AppColors.purpleGradient)
+                        .frame(width: geo.size.width * studyVM.quizProgress)
+                        .animation(AppAnimation.smooth, value: studyVM.quizProgress)
+                }
+            }
+            .frame(height: 6)
+            .padding(.horizontal, AppSpacing.horizontalPadding)
             
-            // Progress text
+            // Stats row
             HStack {
                 Text(studyVM.quizProgressText)
-                    .font(.caption)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
                     .foregroundStyle(.secondary)
                 
                 Spacer()
                 
-                // Score
-                HStack(spacing: 4) {
+                HStack(spacing: AppSpacing.xs) {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                    Text("\(studyVM.correctAnswersCount) correct")
+                        .foregroundStyle(AppColors.success)
+                    Text("\(studyVM.correctAnswersCount)")
+                        .fontWeight(.semibold)
                 }
-                .font(.caption)
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
             }
-            .padding(.horizontal)
+            .padding(.horizontal, AppSpacing.horizontalPadding)
         }
-        .padding(.vertical, 12)
-        .background(Color(.systemBackground))
+        .padding(.vertical, AppSpacing.md)
+        .background(.ultraThinMaterial)
     }
     
-    /// Question card displaying the word or definition.
+    // MARK: - Question Card
+    
     private func questionCard(_ question: QuizQuestion) -> some View {
-        VStack(spacing: 16) {
-            // Question type label
-            Label(
-                quizMode == .multipleChoice ? "What is the definition of:" : "What word matches this definition?",
-                systemImage: "questionmark.circle"
-            )
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
+        VStack(spacing: AppSpacing.md) {
+            // Label
+            Text(quizMode == .multipleChoice ? "What is the definition of:" : "What word matches this definition?")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
             
-            // The word or definition
+            // Content
             if quizMode == .multipleChoice {
                 Text(question.word.word)
                     .font(.system(size: 32, weight: .bold, design: .serif))
@@ -209,24 +230,34 @@ struct QuizSessionView: View {
                 Text(question.word.definition)
                     .font(.title3)
                     .multilineTextAlignment(.center)
-                    .foregroundStyle(.primary)
             }
         }
-        .padding(24)
+        .padding(AppSpacing.xl)
         .frame(maxWidth: .infinity)
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+        .cardStyle()
+        .opacity(hasAppeared ? 1 : 0)
+        .offset(y: hasAppeared ? 0 : 20)
     }
     
-    /// Multiple choice answer options.
-    private func multipleChoiceAnswers(_ question: QuizQuestion) -> some View {
-        VStack(spacing: 12) {
-            ForEach(question.options, id: \.self) { option in
+    // MARK: - Multiple Choice Options
+    
+    private func multipleChoiceOptions(_ question: QuizQuestion) -> some View {
+        VStack(spacing: AppSpacing.sm) {
+            ForEach(Array(question.options.enumerated()), id: \.offset) { index, option in
                 Button {
                     selectAnswer(option, for: question)
                 } label: {
-                    HStack {
+                    HStack(spacing: AppSpacing.md) {
+                        // Option letter
+                        Text(String(Character(UnicodeScalar(65 + index)!)))
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundStyle(optionLetterColor(for: option, question: question))
+                            .frame(width: 28, height: 28)
+                            .background(optionLetterBackground(for: option, question: question))
+                            .clipShape(Circle())
+                        
+                        // Option text
                         Text(option)
                             .font(.body)
                             .multilineTextAlignment(.leading)
@@ -234,153 +265,179 @@ struct QuizSessionView: View {
                         
                         Spacer()
                         
-                        // Show checkmark/x after answering
+                        // Result indicator
                         if showingFeedback {
                             if option == question.correctAnswer {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(.green)
-                            } else if option == selectedAnswer && option != question.correctAnswer {
+                                    .foregroundStyle(AppColors.success)
+                            } else if option == selectedAnswer {
                                 Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(.red)
+                                    .foregroundStyle(AppColors.error)
                             }
-                        } else if option == selectedAnswer {
-                            Image(systemName: "circle.fill")
-                                .foregroundStyle(.blue)
-                                .font(.caption)
-                        } else {
-                            Image(systemName: "circle")
-                                .foregroundStyle(.secondary)
-                                .font(.caption)
                         }
                     }
-                    .padding()
-                    .background(answerBackground(for: option, question: question))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .padding(AppSpacing.md)
+                    .background(optionBackground(for: option, question: question))
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                            .stroke(optionBorder(for: option, question: question), lineWidth: 2)
+                    )
                 }
+                .buttonStyle(.plain)
                 .disabled(showingFeedback)
+                .opacity(hasAppeared ? 1 : 0)
+                .offset(y: hasAppeared ? 0 : 20)
+                .animation(AppAnimation.spring.delay(Double(index) * 0.05), value: hasAppeared)
             }
         }
     }
     
-    /// Fill-in-the-blank answer input.
-    private func fillInBlankAnswer(_ question: QuizQuestion) -> some View {
-        VStack(spacing: 16) {
+    // MARK: - Fill in Blank Input
+    
+    private func fillInBlankInput(_ question: QuizQuestion) -> some View {
+        VStack(spacing: AppSpacing.md) {
             TextField("Type your answer...", text: $userInput)
-                .textFieldStyle(.roundedBorder)
                 .font(.title3)
+                .fontWeight(.medium)
                 .multilineTextAlignment(.center)
+                .textFieldStyle(.plain)
                 .autocapitalization(.none)
                 .autocorrectionDisabled()
+                .padding(AppSpacing.md)
+                .background(AppColors.cardBackground)
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                )
                 .disabled(showingFeedback)
             
             if !showingFeedback {
                 Button {
                     submitFillInBlank(for: question)
                 } label: {
-                    Text("Submit Answer")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding()
+                    Text("Submit")
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.primary)
                 .disabled(userInput.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }
-        .padding()
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .padding(AppSpacing.md)
+        .cardStyle()
+        .opacity(hasAppeared ? 1 : 0)
+        .offset(y: hasAppeared ? 0 : 20)
     }
     
-    /// Feedback card shown after answering.
+    // MARK: - Feedback Card
+    
     private func feedbackCard(_ question: QuizQuestion) -> some View {
-        VStack(spacing: 16) {
-            // Correct/Incorrect indicator
-            HStack {
+        VStack(spacing: AppSpacing.md) {
+            // Result indicator
+            HStack(spacing: AppSpacing.sm) {
                 Image(systemName: question.isCorrect == true ? "checkmark.circle.fill" : "xmark.circle.fill")
                     .font(.title)
-                    .foregroundStyle(question.isCorrect == true ? .green : .red)
+                    .foregroundStyle(question.isCorrect == true ? AppColors.success : AppColors.error)
                 
                 Text(question.isCorrect == true ? "Correct!" : "Incorrect")
                     .font(.headline)
-                    .foregroundStyle(question.isCorrect == true ? .green : .red)
+                    .fontWeight(.bold)
+                    .foregroundStyle(question.isCorrect == true ? AppColors.success : AppColors.error)
             }
             
             // Show correct answer if wrong
             if question.isCorrect != true {
-                VStack(spacing: 8) {
+                VStack(spacing: AppSpacing.xs) {
                     Text("The correct answer was:")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     
-                    if quizMode == .multipleChoice {
-                        Text(question.correctAnswer)
-                            .font(.body)
-                            .fontWeight(.medium)
-                    } else {
-                        Text(question.word.word)
-                            .font(.title3)
-                            .fontWeight(.bold)
-                    }
+                    Text(quizMode == .multipleChoice ? question.correctAnswer : question.word.word)
+                        .font(.body)
+                        .fontWeight(.semibold)
                 }
+                .padding(.top, AppSpacing.xs)
             }
             
-            // Example sentence for context
+            // Example
             if !question.word.exampleSentence.isEmpty {
-                VStack(spacing: 4) {
+                VStack(spacing: AppSpacing.xxs) {
                     Text("Example:")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    
                     Text("\"\(question.word.exampleSentence)\"")
-                        .font(.callout)
+                        .font(.subheadline)
                         .italic()
                         .multilineTextAlignment(.center)
                 }
-                .padding(.top, 8)
+                .padding(.top, AppSpacing.sm)
             }
         }
-        .padding()
+        .padding(AppSpacing.lg)
         .frame(maxWidth: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(question.isCorrect == true ? Color.green.opacity(0.1) : Color.red.opacity(0.1))
+            RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
+                .fill(question.isCorrect == true ? AppColors.success.opacity(0.1) : AppColors.error.opacity(0.1))
         )
+        .transition(.opacity.combined(with: .scale(scale: 0.95)))
     }
     
-    /// Next question button.
+    // MARK: - Next Button
+    
     private var nextButton: some View {
         Button {
             goToNextQuestion()
         } label: {
             Text(studyVM.hasMoreQuestions ? "Next Question" : "Finish Quiz")
-                .font(.headline)
-                .frame(maxWidth: .infinity)
-                .padding()
         }
-        .buttonStyle(.borderedProminent)
-        .padding()
-        .background(Color(.systemBackground))
+        .buttonStyle(.primary)
+        .padding(.horizontal, AppSpacing.horizontalPadding)
+        .padding(.vertical, AppSpacing.md)
+        .background(.ultraThinMaterial)
     }
     
-    /// Returns the background color for an answer option.
-    private func answerBackground(for option: String, question: QuizQuestion) -> Color {
+    // MARK: - Option Styling Helpers
+    
+    private func optionLetterColor(for option: String, question: QuizQuestion) -> Color {
         if showingFeedback {
-            if option == question.correctAnswer {
-                return Color.green.opacity(0.2)
-            } else if option == selectedAnswer {
-                return Color.red.opacity(0.2)
-            }
-        } else if option == selectedAnswer {
-            return Color.blue.opacity(0.1)
+            if option == question.correctAnswer { return .white }
+            if option == selectedAnswer { return .white }
         }
-        return Color(.systemBackground)
+        if option == selectedAnswer { return .white }
+        return .primary
+    }
+    
+    private func optionLetterBackground(for option: String, question: QuizQuestion) -> Color {
+        if showingFeedback {
+            if option == question.correctAnswer { return AppColors.success }
+            if option == selectedAnswer { return AppColors.error }
+        }
+        if option == selectedAnswer { return Color.accentColor }
+        return Color.gray.opacity(0.15)
+    }
+    
+    private func optionBackground(for option: String, question: QuizQuestion) -> Color {
+        if showingFeedback {
+            if option == question.correctAnswer { return AppColors.success.opacity(0.1) }
+            if option == selectedAnswer { return AppColors.error.opacity(0.1) }
+        }
+        return AppColors.cardBackground
+    }
+    
+    private func optionBorder(for option: String, question: QuizQuestion) -> Color {
+        if showingFeedback {
+            if option == question.correctAnswer { return AppColors.success }
+            if option == selectedAnswer { return AppColors.error }
+        }
+        if option == selectedAnswer { return Color.accentColor }
+        return Color.clear
     }
     
     // MARK: - Actions
     
-    /// Starts the quiz session.
     private func startQuiz() {
         studyVM.vocabViewModel = vocabViewModel
-        
         let words = studyVM.getWords(for: source, from: vocabViewModel)
         
         if words.count >= 4 {
@@ -388,31 +445,28 @@ struct QuizSessionView: View {
         }
     }
     
-    /// Selects an answer for multiple choice.
     private func selectAnswer(_ answer: String, for question: QuizQuestion) {
-        logger.debug("❓ Selected answer: '\(answer)' for '\(question.word.word)'")
+        logger.debug("❓ Selected: '\(answer)'")
         
         selectedAnswer = answer
         studyVM.submitAnswer(answer)
         
-        withAnimation(.spring(response: 0.3)) {
+        withAnimation(AppAnimation.spring) {
             showingFeedback = true
         }
     }
     
-    /// Submits the fill-in-the-blank answer.
     private func submitFillInBlank(for question: QuizQuestion) {
         let answer = userInput.trimmingCharacters(in: .whitespaces)
-        logger.debug("❓ Submitted fill-in answer: '\(answer)' for definition")
+        logger.debug("❓ Submitted: '\(answer)'")
         
         studyVM.submitAnswer(answer)
         
-        withAnimation(.spring(response: 0.3)) {
+        withAnimation(AppAnimation.spring) {
             showingFeedback = true
         }
     }
     
-    /// Moves to the next question.
     private func goToNextQuestion() {
         withAnimation {
             showingFeedback = false
@@ -426,215 +480,152 @@ struct QuizSessionView: View {
     }
 }
 
-// MARK: - Quiz Complete View
+// MARK: - Quiz Complete Content View
 
-/// View shown when a quiz is complete.
-struct QuizCompleteView: View {
-    
+struct QuizCompleteContentView: View {
     let result: StudySessionResult?
     let questions: [QuizQuestion]
     let onDismiss: () -> Void
     
     @State private var showingReview = false
-    
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 32) {
-                // Score display
-                scoreDisplay
-                
-                // Performance message
-                performanceMessage
-                
-                // Stats summary
-                if let result = result {
-                    statsSummary(result)
-                }
-                
-                // Action buttons
-                actionButtons
-                
-                // Review incorrect answers
-                if questions.contains(where: { $0.isCorrect == false }) {
-                    reviewSection
-                }
-            }
-            .padding()
-        }
-    }
-    
-    /// Main score display.
-    private var scoreDisplay: some View {
-        VStack(spacing: 8) {
-            // Score circle
-            ZStack {
-                Circle()
-                    .stroke(Color.gray.opacity(0.2), lineWidth: 12)
-                
-                Circle()
-                    .trim(from: 0, to: CGFloat(result?.scorePercentage ?? 0) / 100)
-                    .stroke(scoreColor, style: StrokeStyle(lineWidth: 12, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                    .animation(.spring(response: 0.8), value: result?.scorePercentage)
-                
-                VStack(spacing: 4) {
-                    Text("\(result?.scorePercentage ?? 0)%")
-                        .font(.system(size: 48, weight: .bold, design: .rounded))
-                        .foregroundStyle(scoreColor)
-                    
-                    Text("\(result?.correctAnswers ?? 0)/\(result?.totalQuestions ?? 0)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .frame(width: 180, height: 180)
-        }
-    }
-    
-    /// Performance message based on score.
-    private var performanceMessage: some View {
-        VStack(spacing: 8) {
-            Text(messageTitle)
-                .font(.title2)
-                .fontWeight(.bold)
-            
-            Text(messageSubtitle)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        }
-    }
-    
-    /// Stats summary cards.
-    private func statsSummary(_ result: StudySessionResult) -> some View {
-        HStack(spacing: 16) {
-            QuizStatCard(
-                icon: "clock.fill",
-                value: result.formattedDuration,
-                label: "Time",
-                color: .purple
-            )
-            
-            QuizStatCard(
-                icon: "checkmark.circle.fill",
-                value: "\(result.correctAnswers)",
-                label: "Correct",
-                color: .green
-            )
-            
-            QuizStatCard(
-                icon: "xmark.circle.fill",
-                value: "\(result.totalQuestions - result.correctAnswers)",
-                label: "Incorrect",
-                color: .red
-            )
-        }
-    }
-    
-    /// Action buttons.
-    private var actionButtons: some View {
-        VStack(spacing: 12) {
-            Button {
-                onDismiss()
-            } label: {
-                Text("Done")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-            }
-            .buttonStyle(.borderedProminent)
-        }
-    }
-    
-    /// Review section for incorrect answers.
-    private var reviewSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Button {
-                withAnimation {
-                    showingReview.toggle()
-                }
-            } label: {
-                HStack {
-                    Text("Review Incorrect Answers")
-                        .font(.headline)
-                    Spacer()
-                    Image(systemName: showingReview ? "chevron.up" : "chevron.down")
-                }
-                .foregroundStyle(.primary)
-            }
-            
-            if showingReview {
-                ForEach(questions.filter { $0.isCorrect == false }) { question in
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(question.word.word)
-                            .font(.headline)
-                        
-                        Text(question.word.definition)
-                            .font(.body)
-                            .foregroundStyle(.secondary)
-                        
-                        if let userAnswer = question.userAnswer {
-                            HStack {
-                                Text("Your answer:")
-                                    .font(.caption)
-                                    .foregroundStyle(.red)
-                                Text(userAnswer)
-                                    .font(.caption)
-                                    .strikethrough()
-                            }
-                        }
-                    }
-                    .padding()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(.systemGray6))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                }
-            }
-        }
-        .padding()
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-    }
-    
-    // MARK: - Computed Properties
+    @State private var hasAppeared = false
     
     private var scoreColor: Color {
-        guard let percentage = result?.scorePercentage else { return .gray }
-        if percentage >= 80 { return .green }
-        if percentage >= 60 { return .orange }
-        return .red
+        guard let p = result?.scorePercentage else { return .gray }
+        if p >= 80 { return AppColors.success }
+        if p >= 60 { return AppColors.warning }
+        return AppColors.error
     }
     
     private var messageTitle: String {
-        guard let percentage = result?.scorePercentage else { return "Quiz Complete!" }
-        if percentage >= 90 { return "Outstanding! 🌟" }
-        if percentage >= 80 { return "Great Job! 🎉" }
-        if percentage >= 70 { return "Good Work! 👍" }
-        if percentage >= 60 { return "Keep Practicing! 📚" }
+        guard let p = result?.scorePercentage else { return "Quiz Complete!" }
+        if p >= 90 { return "Outstanding! 🌟" }
+        if p >= 80 { return "Great Job! 🎉" }
+        if p >= 70 { return "Good Work! 👍" }
+        if p >= 60 { return "Keep Practicing! 📚" }
         return "Review & Try Again! 💪"
     }
     
-    private var messageSubtitle: String {
-        guard let percentage = result?.scorePercentage else { return "" }
-        if percentage >= 90 { return "You really know your vocabulary!" }
-        if percentage >= 80 { return "You're doing great with these words!" }
-        if percentage >= 70 { return "You're making solid progress!" }
-        if percentage >= 60 { return "A little more practice and you'll master these!" }
-        return "Review the words you missed and try again!"
+    var body: some View {
+        ScrollView {
+            VStack(spacing: AppSpacing.xl) {
+                Spacer(minLength: AppSpacing.xxl)
+                
+                // Score circle
+                ZStack {
+                    Circle()
+                        .stroke(Color.gray.opacity(0.15), lineWidth: 12)
+                    
+                    Circle()
+                        .trim(from: 0, to: CGFloat(result?.scorePercentage ?? 0) / 100)
+                        .stroke(scoreColor, style: StrokeStyle(lineWidth: 12, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                        .animation(AppAnimation.smooth.delay(0.2), value: hasAppeared)
+                    
+                    VStack(spacing: 4) {
+                        Text("\(result?.scorePercentage ?? 0)%")
+                            .font(.system(size: 48, weight: .bold, design: .rounded))
+                            .foregroundStyle(scoreColor)
+                        
+                        Text("\(result?.correctAnswers ?? 0)/\(result?.totalQuestions ?? 0)")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .frame(width: 180, height: 180)
+                .opacity(hasAppeared ? 1 : 0)
+                .scaleEffect(hasAppeared ? 1 : 0.8)
+                
+                // Message
+                VStack(spacing: AppSpacing.xs) {
+                    Text(messageTitle)
+                        .font(.title2)
+                        .fontWeight(.bold)
+                }
+                .opacity(hasAppeared ? 1 : 0)
+                .offset(y: hasAppeared ? 0 : 20)
+                
+                // Stats
+                if let result = result {
+                    HStack(spacing: AppSpacing.md) {
+                        QuizResultStat(icon: "clock.fill", value: result.formattedDuration, label: "Time", color: .purple)
+                        QuizResultStat(icon: "checkmark.circle.fill", value: "\(result.correctAnswers)", label: "Correct", color: AppColors.success)
+                        QuizResultStat(icon: "xmark.circle.fill", value: "\(result.totalQuestions - result.correctAnswers)", label: "Wrong", color: AppColors.error)
+                    }
+                    .padding(AppSpacing.md)
+                    .cardStyle()
+                    .padding(.horizontal, AppSpacing.horizontalPadding)
+                    .opacity(hasAppeared ? 1 : 0)
+                    .offset(y: hasAppeared ? 0 : 20)
+                }
+                
+                // Done button
+                Button(action: onDismiss) {
+                    Text("Done")
+                }
+                .buttonStyle(.primary)
+                .padding(.horizontal, AppSpacing.xl)
+                .opacity(hasAppeared ? 1 : 0)
+                
+                // Review section
+                if questions.contains(where: { $0.isCorrect == false }) {
+                    VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                        Button {
+                            withAnimation(AppAnimation.spring) {
+                                showingReview.toggle()
+                            }
+                        } label: {
+                            HStack {
+                                Text("Review Incorrect Answers")
+                                    .font(.headline)
+                                Spacer()
+                                Image(systemName: showingReview ? "chevron.up" : "chevron.down")
+                            }
+                            .foregroundStyle(.primary)
+                        }
+                        
+                        if showingReview {
+                            ForEach(questions.filter { $0.isCorrect == false }) { question in
+                                VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                                    Text(question.word.word)
+                                        .font(.headline)
+                                    
+                                    Text(question.word.definition)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .padding(AppSpacing.md)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.gray.opacity(0.1))
+                                .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                            }
+                        }
+                    }
+                    .padding(AppSpacing.md)
+                    .cardStyle()
+                    .padding(.horizontal, AppSpacing.horizontalPadding)
+                    .opacity(hasAppeared ? 1 : 0)
+                }
+                
+                Spacer(minLength: AppSpacing.xxxl)
+            }
+        }
+        .onAppear {
+            withAnimation(AppAnimation.bouncy.delay(0.1)) {
+                hasAppeared = true
+            }
+        }
     }
 }
 
-// MARK: - Stat Card
-
-/// A stat card for quiz results.
-struct QuizStatCard: View {
+struct QuizResultStat: View {
     let icon: String
     let value: String
     let label: String
     let color: Color
     
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: AppSpacing.xs) {
             Image(systemName: icon)
                 .font(.title2)
                 .foregroundStyle(color)
@@ -648,9 +639,6 @@ struct QuizStatCard: View {
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
-        .padding()
-        .background(Color(.systemGray6))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 
@@ -660,4 +648,3 @@ struct QuizStatCard: View {
     QuizSessionView(source: .allWords, quizMode: .multipleChoice)
         .environmentObject(VocabViewModel())
 }
-

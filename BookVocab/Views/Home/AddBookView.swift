@@ -2,74 +2,43 @@
 //  AddBookView.swift
 //  BookVocab
 //
-//  Screen for adding a new book to the collection.
-//  Automatically fetches book covers from Google Books API.
+//  Premium sheet for adding a new book to the collection.
+//  Clean design with smooth animations and intuitive flow.
 //
-//  DEBUG: Includes logging for cover image fetching to diagnose display issues.
+//  Features:
+//  - Search Google Books with live results
+//  - Beautiful cover previews
+//  - Manual entry option
+//  - Smooth transitions
 //
 
 import SwiftUI
 import os.log
 
-/// Logger for AddBookView debugging
 private let logger = Logger(subsystem: "com.bookvocab.app", category: "AddBookView")
 
-/// View for adding a new book to the user's collection.
-/// Supports search-based book addition with automatic cover fetching.
-///
-/// Features:
-/// - Search Google Books API by title
-/// - Auto-fetch and display book covers
-/// - Manual entry mode for books not found in search
-/// - Preview before saving
 struct AddBookView: View {
     
     // MARK: - Environment
     
-    /// Dismiss action for the sheet.
     @Environment(\.dismiss) private var dismiss
-    
-    /// Access to the shared user session view model.
     @EnvironmentObject var session: UserSessionViewModel
-    
-    /// Access to the shared books view model.
     @EnvironmentObject var booksViewModel: BooksViewModel
     
     // MARK: - State
     
-    /// Book title input.
     @State private var title: String = ""
-    
-    /// Book author input.
     @State private var author: String = ""
-    
-    /// Cover image URL (auto-fetched or manual).
     @State private var coverImageUrl: String = ""
-    
-    /// Search query for finding books.
     @State private var searchQuery: String = ""
-    
-    /// Search results from Google Books API.
     @State private var searchResults: [BookSearchResult] = []
-    
-    /// Toggle between manual and search modes.
     @State private var isSearchMode: Bool = true
-    
-    /// Loading state for search operations.
     @State private var isSearching: Bool = false
-    
-    /// Loading state for cover fetch in manual mode.
     @State private var isFetchingCover: Bool = false
-    
-    /// Error message for display.
     @State private var errorMessage: String?
-    
-    /// Show error alert.
     @State private var showingError: Bool = false
+    @State private var selectedResultId: String?
     
-    // MARK: - Computed Properties
-    
-    /// Validates that required fields are filled.
     private var isFormValid: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         !author.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -79,52 +48,47 @@ struct AddBookView: View {
     
     var body: some View {
         NavigationStack {
-            Form {
-                // Mode picker (Search vs Manual)
-                Section {
-                    Picker("Entry Mode", selection: $isSearchMode) {
-                        Text("Search").tag(true)
-                        Text("Manual").tag(false)
-                    }
-                    .pickerStyle(.segmented)
-                    .onChange(of: isSearchMode) { _, _ in
-                        // Clear fields when switching modes
-                        clearFields()
-                    }
-                }
-                
-                if isSearchMode {
-                    // Search section
-                    searchSection
+            ScrollView {
+                VStack(spacing: AppSpacing.lg) {
+                    // Mode toggle
+                    modeToggle
+                        .padding(.horizontal, AppSpacing.horizontalPadding)
+                        .padding(.top, AppSpacing.md)
                     
-                    // Search results
-                    if !searchResults.isEmpty {
-                        searchResultsSection
+                    if isSearchMode {
+                        searchSection
+                        
+                        if !searchResults.isEmpty {
+                            searchResultsSection
+                        }
+                    } else {
+                        manualEntrySection
                     }
-                } else {
-                    // Manual entry section
-                    manualEntrySection
+                    
+                    // Preview
+                    if !title.isEmpty {
+                        previewSection
+                    }
                 }
-                
-                // Preview section (shows when we have title)
-                if !title.isEmpty {
-                    bookPreviewSection
-                }
+                .padding(.bottom, AppSpacing.xxxl)
             }
+            .background(AppColors.groupedBackground)
             .navigationTitle("Add Book")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                // Cancel button
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
                         dismiss()
                     }
+                    .foregroundStyle(.secondary)
                 }
                 
-                // Save button
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
+                    Button {
                         saveBook()
+                    } label: {
+                        Text("Add")
+                            .fontWeight(.semibold)
                     }
                     .disabled(!isFormValid || isSearching)
                 }
@@ -137,224 +101,311 @@ struct AddBookView: View {
         }
     }
     
-    // MARK: - View Components
+    // MARK: - Mode Toggle
     
-    /// Search input section.
+    private var modeToggle: some View {
+        HStack(spacing: 0) {
+            modeButton(title: "Search", icon: "magnifyingglass", isSelected: isSearchMode) {
+                withAnimation(AppAnimation.spring) {
+                    isSearchMode = true
+                    clearFields()
+                }
+            }
+            
+            modeButton(title: "Manual", icon: "pencil", isSelected: !isSearchMode) {
+                withAnimation(AppAnimation.spring) {
+                    isSearchMode = false
+                    clearFields()
+                }
+            }
+        }
+        .padding(4)
+        .background(Color.gray.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+    }
+    
+    private func modeButton(title: String, icon: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: AppSpacing.xs) {
+                Image(systemName: icon)
+                    .font(.subheadline)
+                Text(title)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, AppSpacing.sm)
+            .background(isSelected ? AppColors.cardBackground : Color.clear)
+            .foregroundStyle(isSelected ? .primary : .secondary)
+            .clipShape(RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
+            .shadow(color: isSelected ? .black.opacity(0.05) : .clear, radius: 4, y: 2)
+        }
+        .buttonStyle(.plain)
+    }
+    
+    // MARK: - Search Section
+    
     private var searchSection: some View {
-        Section {
-            HStack {
-                TextField("Search by book title...", text: $searchQuery)
-                    .autocorrectionDisabled()
-                    .onSubmit {
-                        Task { await performSearch() }
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Text("Search Books")
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, AppSpacing.horizontalPadding)
+            
+            HStack(spacing: AppSpacing.sm) {
+                HStack(spacing: AppSpacing.sm) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
+                    
+                    TextField("Search by title or author...", text: $searchQuery)
+                        .textFieldStyle(.plain)
+                        .onSubmit {
+                            Task { await performSearch() }
+                        }
+                    
+                    if !searchQuery.isEmpty {
+                        Button {
+                            searchQuery = ""
+                            searchResults = []
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.tertiary)
+                        }
                     }
+                }
+                .padding(AppSpacing.sm)
+                .background(AppColors.cardBackground)
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
                 
                 Button {
                     Task { await performSearch() }
                 } label: {
-                    if isSearching {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle())
-                    } else {
-                        Image(systemName: "magnifyingglass")
-                    }
-                }
-                .disabled(searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSearching)
-            }
-        } header: {
-            Text("Search Google Books")
-        } footer: {
-            Text("Search by title to find books and automatically fetch cover images.")
-        }
-    }
-    
-    /// Search results list.
-    private var searchResultsSection: some View {
-        Section("Search Results") {
-            ForEach(searchResults) { result in
-                Button {
-                    selectSearchResult(result)
-                } label: {
-                    HStack(spacing: 12) {
-                        // Cover thumbnail
-                        if let coverUrl = result.coverImageUrl {
-                            AsyncImage(url: URL(string: coverUrl)) { image in
-                                image
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                            } placeholder: {
-                                smallCoverPlaceholder
-                            }
-                            .frame(width: 40, height: 56)
-                            .clipShape(RoundedRectangle(cornerRadius: 4))
-                        } else {
-                            smallCoverPlaceholder
-                                .frame(width: 40, height: 56)
-                        }
-                        
-                        // Book info
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(result.title)
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundStyle(.primary)
-                                .lineLimit(2)
-                            
-                            Text(result.author)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                            
-                            if let year = result.publishedDate?.prefix(4) {
-                                Text(String(year))
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
-                            }
-                        }
-                        
-                        Spacer()
-                        
-                        // Selection indicator
-                        if result.title == title && result.author == author {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    /// Manual entry form fields.
-    private var manualEntrySection: some View {
-        Section {
-            TextField("Book Title", text: $title)
-                .onChange(of: title) { _, newValue in
-                    // Auto-fetch cover when title changes (debounced)
-                    if !newValue.isEmpty && coverImageUrl.isEmpty {
-                        Task {
-                            try? await Task.sleep(nanoseconds: 500_000_000)
-                            if title == newValue && coverImageUrl.isEmpty {
-                                await fetchCoverForManualEntry()
-                            }
-                        }
-                    }
-                }
-            
-            TextField("Author", text: $author)
-            
-            HStack {
-                TextField("Cover Image URL (optional)", text: $coverImageUrl)
-                    .keyboardType(.URL)
-                    .autocapitalization(.none)
-                    .autocorrectionDisabled()
-                
-                if isFetchingCover {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle())
-                }
-            }
-        } header: {
-            Text("Book Details")
-        } footer: {
-            Text("Enter details manually. Cover will be auto-fetched if found.")
-        }
-    }
-    
-    /// Preview of the book being added.
-    private var bookPreviewSection: some View {
-        Section("Preview") {
-            HStack(spacing: 16) {
-                // Cover preview
-                if !coverImageUrl.isEmpty {
-                    AsyncImage(url: URL(string: coverImageUrl)) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        case .failure:
-                            coverPlaceholder
-                        case .empty:
+                    Group {
+                        if isSearching {
                             ProgressView()
-                        @unknown default:
-                            coverPlaceholder
+                                .tint(.white)
+                        } else {
+                            Image(systemName: "arrow.right")
                         }
                     }
-                    .frame(width: 70, height: 100)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
-                } else {
-                    coverPlaceholder
-                        .frame(width: 70, height: 100)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background {
+                        if searchQuery.isEmpty {
+                            Color.gray.opacity(0.3)
+                        } else {
+                            AppColors.primary
+                        }
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
                 }
+                .disabled(searchQuery.isEmpty || isSearching)
+            }
+            .padding(.horizontal, AppSpacing.horizontalPadding)
+        }
+    }
+    
+    // MARK: - Search Results
+    
+    private var searchResultsSection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Text("Results")
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, AppSpacing.horizontalPadding)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: AppSpacing.md) {
+                    ForEach(searchResults) { result in
+                        SearchResultCard(
+                            result: result,
+                            isSelected: selectedResultId == result.id
+                        ) {
+                            selectSearchResult(result)
+                        }
+                    }
+                }
+                .padding(.horizontal, AppSpacing.horizontalPadding)
+            }
+        }
+    }
+    
+    // MARK: - Manual Entry
+    
+    private var manualEntrySection: some View {
+        VStack(spacing: AppSpacing.md) {
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                Text("Book Title")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
                 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(title)
-                        .font(.headline)
-                        .lineLimit(2)
-                    
-                    Text(author)
+                TextField("Enter book title", text: $title)
+                    .textFieldStyle(.plain)
+                    .padding(AppSpacing.md)
+                    .background(AppColors.cardBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                    .onChange(of: title) { _, newValue in
+                        if !newValue.isEmpty && coverImageUrl.isEmpty {
+                            Task {
+                                try? await Task.sleep(nanoseconds: 500_000_000)
+                                if title == newValue && coverImageUrl.isEmpty {
+                                    await fetchCoverForManualEntry()
+                                }
+                            }
+                        }
+                    }
+            }
+            
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                Text("Author")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+                
+                TextField("Enter author name", text: $author)
+                    .textFieldStyle(.plain)
+                    .padding(AppSpacing.md)
+                    .background(AppColors.cardBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+            }
+            
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                HStack {
+                    Text("Cover URL")
                         .font(.subheadline)
+                        .fontWeight(.medium)
                         .foregroundStyle(.secondary)
                     
-                    if !coverImageUrl.isEmpty {
-                        Label("Cover found", systemImage: "checkmark.circle.fill")
-                            .font(.caption)
-                            .foregroundStyle(.green)
-                    } else {
-                        Label("No cover", systemImage: "photo")
-                            .font(.caption)
+                    Text("(Optional)")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                    
+                    Spacer()
+                    
+                    if isFetchingCover {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                    }
+                }
+                
+                TextField("Auto-fetched or enter URL", text: $coverImageUrl)
+                    .textFieldStyle(.plain)
+                    .font(.caption)
+                    .padding(AppSpacing.md)
+                    .background(AppColors.cardBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+            }
+        }
+        .padding(.horizontal, AppSpacing.horizontalPadding)
+    }
+    
+    // MARK: - Preview Section
+    
+    private var previewSection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Text("Preview")
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, AppSpacing.horizontalPadding)
+            
+            HStack(spacing: AppSpacing.md) {
+                // Cover
+                bookCoverPreview
+                    .frame(width: 80, height: 115)
+                
+                // Info
+                VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                    Text(title)
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .lineLimit(2)
+                    
+                    if !author.isEmpty {
+                        Text(author)
+                            .font(.subheadline)
                             .foregroundStyle(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    // Status badges
+                    HStack(spacing: AppSpacing.xs) {
+                        if !coverImageUrl.isEmpty {
+                            PillTag(text: "Cover found", color: AppColors.success, icon: "checkmark.circle.fill")
+                        } else {
+                            PillTag(text: "No cover", color: .gray, icon: "photo")
+                        }
                     }
                 }
                 
                 Spacer()
             }
-            .padding(.vertical, 4)
+            .padding(AppSpacing.md)
+            .cardStyle()
+            .padding(.horizontal, AppSpacing.horizontalPadding)
         }
     }
     
-    /// Placeholder for book covers.
-    private var coverPlaceholder: some View {
-        RoundedRectangle(cornerRadius: 6)
-            .fill(
-                LinearGradient(
-                    colors: [Color.blue.opacity(0.3), Color.blue.opacity(0.1)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .overlay {
-                Image(systemName: "book.closed.fill")
-                    .font(.title2)
-                    .foregroundStyle(.blue.opacity(0.5))
+    private var bookCoverPreview: some View {
+        Group {
+            if !coverImageUrl.isEmpty, let url = URL(string: coverImageUrl) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    case .failure:
+                        coverPlaceholder
+                    case .empty:
+                        coverPlaceholder
+                            .overlay {
+                                ProgressView()
+                                    .tint(.white)
+                            }
+                    @unknown default:
+                        coverPlaceholder
+                    }
+                }
+            } else {
+                coverPlaceholder
             }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
+        .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
     }
     
-    /// Small placeholder for search results.
-    private var smallCoverPlaceholder: some View {
-        RoundedRectangle(cornerRadius: 4)
-            .fill(Color.blue.opacity(0.2))
-            .overlay {
-                Image(systemName: "book.closed.fill")
-                    .font(.caption)
-                    .foregroundStyle(.blue.opacity(0.5))
-            }
+    private var coverPlaceholder: some View {
+        ZStack {
+            LinearGradient(
+                colors: [AppColors.tanDark, AppColors.tan],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            
+            Image(systemName: "book.closed.fill")
+                .font(.title)
+                .foregroundStyle(AppColors.primary.opacity(0.5))
+        }
     }
     
     // MARK: - Actions
     
-    /// Clears all form fields.
     private func clearFields() {
         title = ""
         author = ""
         coverImageUrl = ""
         searchQuery = ""
         searchResults = []
+        selectedResultId = nil
     }
     
-    /// Performs book search using Google Books API.
     private func performSearch() async {
         guard !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         
@@ -362,12 +413,10 @@ struct AddBookView: View {
         errorMessage = nil
         
         do {
-            // Call Google Books API via our service
             searchResults = try await BookSearchService.shared.searchBooks(query: searchQuery)
             
-            // Auto-select first result if we have results
-            if let firstResult = searchResults.first {
-                selectSearchResult(firstResult)
+            if let first = searchResults.first {
+                selectSearchResult(first)
             }
         } catch let error as BookSearchError {
             errorMessage = error.localizedDescription
@@ -382,61 +431,40 @@ struct AddBookView: View {
         isSearching = false
     }
     
-    /// Selects a book from search results.
     private func selectSearchResult(_ result: BookSearchResult) {
         logger.info("📖 Selected: '\(result.title)' by \(result.author)")
         
-        title = result.title
-        author = result.author
-        
-        // Set cover URL, ensuring it's not nil
-        if let url = result.coverImageUrl, !url.isEmpty {
-            coverImageUrl = url
-            logger.info("📖 Cover URL set: \(url)")
-        } else {
-            coverImageUrl = ""
-            logger.warning("📖 No cover URL available for '\(result.title)'")
+        withAnimation(AppAnimation.spring) {
+            selectedResultId = result.id
+            title = result.title
+            author = result.author
+            coverImageUrl = result.coverImageUrl ?? ""
         }
     }
     
-    /// Fetches cover image for manual entry mode.
     private func fetchCoverForManualEntry() async {
         guard !title.isEmpty else { return }
         
-        logger.info("📖 Manual entry: Fetching cover for '\(title)'")
         isFetchingCover = true
-        
-        // Try to find a cover using the title (and author if available)
         let searchTerm = author.isEmpty ? title : "\(title) \(author)"
-        logger.debug("📖 Manual entry: Search term = '\(searchTerm)'")
         
         if let coverUrl = await BookSearchService.shared.fetchCoverImageUrl(for: searchTerm) {
-            // Only update if user hasn't entered a URL manually
             if coverImageUrl.isEmpty {
-                coverImageUrl = coverUrl
-                logger.info("📖 Manual entry: Cover found and set: \(coverUrl)")
-            } else {
-                logger.debug("📖 Manual entry: User already has a cover URL, not overwriting")
+                await MainActor.run {
+                    withAnimation(AppAnimation.spring) {
+                        coverImageUrl = coverUrl
+                    }
+                }
             }
-        } else {
-            logger.warning("📖 Manual entry: No cover found for '\(searchTerm)'")
         }
         
         isFetchingCover = false
     }
     
-    /// Saves the new book to the collection.
     private func saveBook() {
-        // Get the user ID from the current Supabase session
         let userId = session.currentUser?.id ?? UUID()
         
-        // Log the book being saved with cover info
         logger.info("📖 Saving book: '\(title)' by \(author)")
-        if coverImageUrl.isEmpty {
-            logger.warning("📖 Saving WITHOUT cover image")
-        } else {
-            logger.info("📖 Saving WITH cover: \(coverImageUrl)")
-        }
         
         Task {
             await booksViewModel.addBook(
@@ -445,8 +473,74 @@ struct AddBookView: View {
                 coverImageUrl: coverImageUrl.isEmpty ? nil : coverImageUrl,
                 userId: userId
             )
-            logger.info("📖 Book saved successfully")
             dismiss()
+        }
+    }
+}
+
+// MARK: - Search Result Card
+
+struct SearchResultCard: View {
+    let result: BookSearchResult
+    let isSelected: Bool
+    let onTap: () -> Void
+    
+    var body: some View {
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                // Cover
+                Group {
+                    if let coverUrl = result.coverImageUrl, let url = URL(string: coverUrl) {
+                        AsyncImage(url: url) { image in
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        } placeholder: {
+                            placeholderCover
+                        }
+                    } else {
+                        placeholderCover
+                    }
+                }
+                .frame(width: 100, height: 140)
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+                        .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 3)
+                )
+                .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
+                
+                // Info
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(result.title)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                    
+                    Text(result.author)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                .frame(width: 100, alignment: .leading)
+            }
+        }
+        .buttonStyle(.plain)
+        .scaleEffect(isSelected ? 1.02 : 1.0)
+        .animation(AppAnimation.spring, value: isSelected)
+    }
+    
+    private var placeholderCover: some View {
+        ZStack {
+            LinearGradient(
+                colors: [Color.gray.opacity(0.3), Color.gray.opacity(0.2)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            
+            Image(systemName: "book.closed.fill")
+                .foregroundStyle(.gray.opacity(0.5))
         }
     }
 }
