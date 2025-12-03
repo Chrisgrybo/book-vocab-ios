@@ -20,11 +20,21 @@ Book Vocab helps users build their vocabulary by collecting and organizing words
 - Tap "Add" to save
 
 ### 3. Add Vocabulary Words
+
+**From a Book:**
 - Tap on a book to view its details
-- Tap "Add Word" 
-- Enter a word and tap the 🔍 button to look it up
+- Tap **+** in the toolbar
+- Enter a word and tap 🔍 to look it up
 - Definition, synonyms, antonyms, and examples are auto-filled
-- Edit if needed, then tap "Add"
+- Edit if needed, then tap "Save"
+
+**From the Words Tab (New!):**
+- Go to the **Words** tab
+- Tap **+** in the toolbar
+- Choose a book from the picker, or leave as "None (All Words)" for a global word
+- Look up the word and save
+
+> 💡 **Tip**: Global words (not assigned to any book) appear only in the Words tab and can be studied in "All Words" mode.
 
 ### 4. Study Your Words
 - Go to the **Study** tab
@@ -46,7 +56,7 @@ Book Vocab helps users build their vocabulary by collecting and organizing words
 - **Books & Vocab**: All added books and vocabulary words are cached locally using Core Data
 - **Study Sessions**: Flashcards and quizzes work without an internet connection
 - **Auto-Sync**: Changes made offline are automatically synced to Supabase when you're back online
-- **Offline Indicator**: An orange banner appears when you're offline
+- **Offline Indicator**: A banner appears when you're offline
 
 > 💡 **Tip**: Add books and look up words while online, then study anywhere — even without Wi-Fi!
 
@@ -68,7 +78,7 @@ BookVocab/
 │   └── Secrets.example.swift    # Template for Secrets.swift
 ├── Models/                       # Data models
 │   ├── Book.swift               # Book model
-│   ├── VocabWord.swift          # Vocabulary word model
+│   ├── VocabWord.swift          # Vocabulary word model (optional bookId)
 │   └── User.swift               # User model
 ├── ViewModels/                   # View models (business logic)
 │   ├── UserSessionViewModel.swift # Authentication & session
@@ -84,12 +94,14 @@ BookVocab/
 │   │   ├── AddBookView.swift    # Add book with cover search
 │   │   └── BookDetailView.swift # Book details & vocab
 │   ├── Vocab/
-│   │   ├── AddVocabView.swift   # Add word with dictionary lookup
-│   │   └── AllVocabView.swift   # All words list
-│   └── Study/
-│       ├── StudyView.swift      # Study hub with mode selection
-│       ├── FlashcardView.swift  # Flashcard study mode
-│       └── QuizView.swift       # Quiz modes (MC & fill-in)
+│   │   ├── AddVocabView.swift   # Add word with dictionary lookup & book picker
+│   │   └── AllVocabView.swift   # All words list with add button
+│   ├── Study/
+│   │   ├── StudyView.swift      # Study hub with mode selection
+│   │   ├── FlashcardView.swift  # Flashcard study mode
+│   │   └── QuizView.swift       # Quiz modes (MC & fill-in)
+│   └── Components/
+│       └── Theme.swift          # Design system (colors, spacing, styles)
 └── Services/                     # Backend & offline services
     ├── SupabaseService.swift    # Supabase auth & database
     ├── DictionaryService.swift  # Free Dictionary API
@@ -115,7 +127,12 @@ BookVocab/
 - [x] **Vocabulary Tracking**
   - Definitions, synonyms, antonyms, example sentences
   - Mastery status toggle
-  - Global vocabulary list with search
+  - Global vocabulary list with search & filters
+  - **Add words from Words tab** with book picker
+  - **Global words** (unassigned) supported
+- [x] **Dictionary Autofill**
+  - Automatically fills definition, synonyms, antonyms, example
+  - **Fixed**: Fields now reset correctly when looking up a new word
 - [x] **Study Section**
   - 📇 Flashcards with 3D flip animation & swipe gestures
   - 📝 Multiple choice quiz
@@ -128,7 +145,11 @@ BookVocab/
   - Network connectivity monitoring
   - Auto-sync when back online
   - Offline indicator banner
-- [x] **Tab-based Navigation** (Books, All Words, Study)
+- [x] **Modern UI**
+  - Warm tan & cream color palette with black accents
+  - Consistent card styling and spacing
+  - Smooth animations throughout
+- [x] **Tab-based Navigation** (Books, Words, Study)
 
 ### 🚧 TODO (Future Enhancements)
 
@@ -193,7 +214,7 @@ CREATE TABLE books (
 -- Vocabulary words table
 CREATE TABLE vocab_words (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  book_id UUID REFERENCES books(id) ON DELETE CASCADE,
+  book_id UUID REFERENCES books(id) ON DELETE CASCADE,  -- NULL for global words
   word TEXT NOT NULL,
   definition TEXT NOT NULL,
   synonyms TEXT[] DEFAULT '{}',
@@ -235,3 +256,4 @@ This project is licensed under the MIT License.
 - Built with SwiftUI and modern iOS development practices
 - Designed for iOS 17+ with latest SwiftUI features
 - Offline-first architecture for reliable user experience
+- Warm, book-inspired aesthetic with tan backgrounds and black accents
