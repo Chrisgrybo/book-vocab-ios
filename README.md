@@ -45,12 +45,16 @@ Book Vocab helps users build their vocabulary by collecting and organizing words
   - **Fill in the Blank**: Type the word from its definition
 
 **After completing a session:**
-- Review all words you studied on the **Summary Screen**
-- **Select which words to mark as mastered** using checkboxes
-- Tap **"Save"** to persist your selections
-- Words you didn't select remain in "learning" mode
+1. View the **Summary Screen** with all words you studied
+2. See which words you got right ✅ and which you missed ❌
+3. **Select which words to mark as mastered** using checkboxes
+4. Tap **"Save"** to persist your selections
+5. An interstitial ad may appear (after a brief delay)
+6. Return to the Study tab
 
-> 💡 **New!** Words are no longer auto-marked as mastered. You have full control over which words you've truly learned.
+> 💡 **Manual Mastery Control** — Words are never auto-marked as mastered. You decide which words you've truly learned after each session.
+
+> 📺 **Ad Timing** — Interstitial ads only appear *after* you save your progress, never during active study or before your data is saved.
 
 ### 5. Track Your Progress
 - View stats on the Home and Study screens
@@ -73,6 +77,28 @@ Book Vocab helps users build their vocabulary by collecting and organizing words
 - **iOS 17.0+**
 - **Xcode 15.0+**
 - **Swift 5.9+**
+
+## 🔐 Required Environment Secrets
+
+The app requires several API keys to be configured in `BookVocab/Config/Secrets.swift`. Copy the example file and fill in your credentials:
+
+```bash
+cp BookVocab/Config/Secrets.example.swift BookVocab/Config/Secrets.swift
+```
+
+| Secret | Required | Source | Description |
+|--------|----------|--------|-------------|
+| `supabaseUrl` | ✅ Yes | [supabase.com](https://supabase.com) | Your Supabase project URL |
+| `supabaseKey` | ✅ Yes | Supabase Dashboard | Your Supabase anon/public key |
+| `mixpanelToken` | ⚠️ Recommended | [mixpanel.com](https://mixpanel.com) | Analytics token (app works without it) |
+
+**AdMob Configuration** (in `Info.plist`):
+
+| Key | Required | Description |
+|-----|----------|-------------|
+| `GADApplicationIdentifier` | ✅ For ads | Your AdMob App ID |
+
+> ⚠️ **Important:** `Secrets.swift` is gitignored and must never be committed. Test ad unit IDs are used by default in `AdManager.swift`.
 
 ## Architecture
 
@@ -119,7 +145,8 @@ BookVocab/
     ├── CacheService.swift       # Local caching operations
     ├── NetworkMonitor.swift     # Connectivity detection
     ├── SyncService.swift        # Offline sync management
-    └── AdManager.swift          # AdMob ad management singleton
+    ├── AdManager.swift          # AdMob ad management singleton
+    └── AnalyticsService.swift   # Mixpanel analytics wrapper
 ```
 
 ## Features
@@ -151,6 +178,7 @@ BookVocab/
   - 🎯 Study by book or all words
   - 🔄 "Learning only" filter
   - ✅ **Manual mastery selection** — choose which words to mark as mastered after each session
+  - 🔒 **Fixed flashcard flow** — ads only show after saving, data is never lost
 - [x] **Offline Caching**
   - Core Data local storage
   - Network connectivity monitoring
@@ -158,15 +186,24 @@ BookVocab/
   - Offline indicator banner
 - [x] **Modern UI**
   - Warm tan & cream color palette with black accents
-  - Consistent card styling and spacing
-  - Smooth animations throughout
-  - Polished login/signup screen matching app theme
+  - Consistent card styling and spacing (22–28pt corner radius)
+  - Smooth animations throughout (spring & easeInOut)
+  - Redesigned login/signup screen with card-based layout
+  - Gradient headers and unified design system (`Theme.swift`)
 - [x] **Tab-based Navigation** (Books, Words, Study)
 
 - [x] **AdMob Integration**
   - MREC (300x250) banner ads in lists
   - Interstitial ads after study sessions
   - Premium ad-removal option (`isPremium` flag)
+
+- [x] **Mixpanel Analytics**
+  - User authentication tracking (signup, login, logout)
+  - Book & word management events
+  - Study session analytics (mode, duration, accuracy)
+  - Revenue & freemium event tracking (ready for IAP)
+  - Offline event queueing
+  - User profile management
 
 ### 🚧 TODO (Future Enhancements)
 
@@ -189,9 +226,14 @@ Book Vocab uses Google AdMob for monetization with a premium ad-removal option.
 
 #### Interstitial Ads
 - **After Study Sessions**: Shown after user taps "Save" on the session summary screen
-- 1.5 second delay to let user see the "saved" confirmation
-- Only displayed after save action, never during active study
-- App returns to study tab after ad is dismissed
+- **Timing flow**:
+  1. User completes flashcards or quiz → Summary screen appears
+  2. User reviews results and selects words to mark as mastered
+  3. User taps "Save" → Progress is persisted to database
+  4. Brief delay (1.5s) → Interstitial ad appears
+  5. User dismisses ad → Returns to Study tab
+- **Key guarantee**: Progress is always saved *before* the ad appears
+- Never interrupts active study or blocks data saving
 
 ### Premium Ad Removal
 
@@ -255,6 +297,111 @@ static let interstitialAdUnitID = "ca-app-pub-XXXXXXXXXXXXXXXX/ZZZZZZZZZZ"
 - Interstitials never interrupt active study
 - All ads respect premium status
 
+## 📊 Mixpanel Analytics Integration
+
+Book Vocab uses Mixpanel for comprehensive analytics tracking with offline support.
+
+### Setup
+
+1. Create a Mixpanel account at [mixpanel.com](https://mixpanel.com) (free tier available)
+2. Create a new project for BookVocab
+3. Copy your Project Token from Settings > Project Settings
+4. Add to your `Secrets.swift`:
+
+```swift
+static let mixpanelToken = "your-mixpanel-token"
+```
+
+### Tracked Events
+
+#### Authentication Events
+| Event | Properties | When Triggered |
+|-------|------------|----------------|
+| `Sign Up` | `user_id` | User creates account |
+| `Login` | `user_id` | User logs in |
+| `Logout` | - | User logs out |
+| `Login Failed` | `error` | Login attempt fails |
+| `Sign Up Failed` | `error` | Signup attempt fails |
+
+#### Book Management Events
+| Event | Properties | When Triggered |
+|-------|------------|----------------|
+| `Book Added` | `book_title`, `book_author`, `has_cover` | User adds a book |
+| `Book Deleted` | `book_title` | User deletes a book |
+| `Book Viewed` | `book_title`, `word_count` | User opens book detail |
+
+#### Word Management Events
+| Event | Properties | When Triggered |
+|-------|------------|----------------|
+| `Word Added` | `word`, `book_title`, `is_global_word` | User adds a word |
+| `Word Deleted` | `word` | User deletes a word |
+| `Word Looked Up` | `word`, `success` | Dictionary lookup |
+| `Word Mastery Toggled` | `word`, `mastered` | Mastery status changed |
+| `Words Mastered From Session` | `mastered_count`, `study_mode` | User saves mastery from summary |
+
+#### Study Session Events
+| Event | Properties | When Triggered |
+|-------|------------|----------------|
+| `Study Session Started` | `study_mode`, `study_source`, `word_count` | Session begins |
+| `Study Session Completed` | `study_mode`, `study_source`, `word_count`, `correct_count`, `mastered_count`, `duration_seconds`, `score_percentage` | Session ends |
+| `Flashcard Swiped` | `swipe_direction`, `card_index`, `total_cards` | User swipes flashcard |
+| `Quiz Answer Submitted` | `is_correct`, `question_index`, `total_questions`, `question_type` | User answers quiz |
+
+#### Revenue & Freemium Events (Ready for IAP)
+| Event | Properties | When Triggered |
+|-------|------------|----------------|
+| `Premium Purchased` | `plan_type`, `price`, `currency`, `transaction_id` | User purchases premium |
+| `Trial Started` | `plan_type`, `duration_days` | User starts trial |
+| `Subscription Renewed` | `plan_type`, `price`, `currency` | Subscription renews |
+| `Subscription Cancelled` | `plan_type` | User cancels |
+| `Ads Removed` | `method`, `plan_type` | Ads disabled |
+| `Purchase Failed` | `error_message` | Purchase attempt fails |
+
+### User Profile Properties
+
+The following properties are set on user profiles:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `is_premium` | Boolean | Whether user has premium |
+| `premium_plan_type` | String | monthly/annual |
+| `ad_free` | Boolean | Whether ads are disabled |
+| `total_spent` | Number | Cumulative revenue |
+
+### Debug Logging
+
+In debug builds, all analytics events are logged to the console with the `📊` prefix:
+
+```
+📊 Tracked: Study Session Started
+📊 Properties: ["study_mode": "Flashcards", "word_count": 10]
+```
+
+Production builds have logging disabled.
+
+### Adding New Events
+
+To add a new event:
+
+1. Add the event to `AnalyticsEvent` enum in `AnalyticsService.swift`
+2. Add any new properties to `AnalyticsProperty` enum
+3. (Optional) Create a convenience method for complex events
+4. Call `AnalyticsService.shared.track(.yourEvent, properties: [...])`
+
+Example:
+```swift
+// In AnalyticsService.swift
+enum AnalyticsEvent: String {
+    case newFeatureUsed = "New Feature Used"
+}
+
+// In your view/viewmodel
+AnalyticsService.shared.track(.newFeatureUsed, properties: [
+    "feature_name": "gamification",
+    "level": 5
+])
+```
+
 ## Getting Started
 
 1. **Clone the repository**
@@ -287,8 +434,12 @@ static let interstitialAdUnitID = "ca-app-pub-XXXXXXXXXXXXXXXX/ZZZZZZZZZZ"
 3. Update with your credentials:
    ```swift
    enum Secrets {
+       // Supabase
        static let supabaseUrl = "https://your-project.supabase.co"
        static let supabaseKey = "your-anon-key"
+       
+       // Mixpanel (get from mixpanel.com > Settings > Project Settings)
+       static let mixpanelToken = "your-mixpanel-token"
    }
    ```
 
@@ -329,6 +480,7 @@ ALTER TABLE vocab_words ENABLE ROW LEVEL SECURITY;
 
 - **[Supabase Swift SDK](https://github.com/supabase/supabase-swift)** - Authentication & database
 - **[Google Mobile Ads SDK](https://github.com/googleads/swift-package-manager-google-mobile-ads)** - AdMob monetization
+- **[Mixpanel Swift SDK](https://github.com/mixpanel/mixpanel-swift)** - Analytics tracking
 - **Core Data** - Local offline caching (built into iOS)
 
 ### External APIs (No SDK Required)

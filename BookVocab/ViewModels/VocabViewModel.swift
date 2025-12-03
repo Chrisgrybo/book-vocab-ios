@@ -224,6 +224,15 @@ class VocabViewModel: ObservableObject {
             logger.debug("📝 Offline - vocab word saved to cache, will sync later")
         }
         
+        // Track word added event
+        // Find book title if word is assigned to a book
+        let bookTitle: String? = nil // Would need to look up from BooksViewModel
+        AnalyticsService.shared.trackWordAdded(
+            word: word.word,
+            bookTitle: bookTitle,
+            isGlobal: word.bookId == nil
+        )
+        
         isLoading = false
     }
     
@@ -348,6 +357,11 @@ class VocabViewModel: ObservableObject {
         } else {
             logger.debug("📝 Offline - deletion saved to cache, will sync later")
         }
+        
+        // Track word deleted event
+        AnalyticsService.shared.track(.wordDeleted, properties: [
+            AnalyticsProperty.word.rawValue: word.word
+        ])
         
         isLoading = false
     }

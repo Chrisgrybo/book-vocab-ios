@@ -11,6 +11,8 @@
 		0615CFBA2EDF74D2003F1843 /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = 0615CFB92EDF74D2003F1843 /* PostgREST */; };
 		0615CFBC2EDF74D2003F1843 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 0615CFBB2EDF74D2003F1843 /* Supabase */; };
 		0615CFBE2EE0D29D003F1843 /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = 0615CFBD2EE0D29D003F1843 /* GoogleMobileAds */; };
+		0615CFC22EE0E76C003F1843 /* Mixpanel in Frameworks */ = {isa = PBXBuildFile; productRef = 0615CFC12EE0E76C003F1843 /* Mixpanel */; };
+		0615CFC42EE0EAE7003F1843 /* AnalyticsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0615CFC32EE0EAE7003F1843 /* AnalyticsService.swift */; };
 		APP001 /* BookVocabApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC001 /* BookVocabApp.swift */; };
 		AST001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = RES001 /* Assets.xcassets */; };
 		AST002 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = RES002 /* Preview Assets.xcassets */; };
@@ -47,6 +49,7 @@
 
 /* Begin PBXFileReference section */
 		0615CFBF2EE0D55B003F1843 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		0615CFC32EE0EAE7003F1843 /* AnalyticsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsService.swift; sourceTree = "<group>"; };
 		PRD001 /* BookVocab.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BookVocab.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		RES001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		RES002 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
@@ -89,6 +92,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0615CFBE2EE0D29D003F1843 /* GoogleMobileAds in Frameworks */,
+				0615CFC22EE0E76C003F1843 /* Mixpanel in Frameworks */,
 				0615CFBA2EDF74D2003F1843 /* PostgREST in Frameworks */,
 				0615CFB82EDF74D2003F1843 /* Auth in Frameworks */,
 				0615CFBC2EDF74D2003F1843 /* Supabase in Frameworks */,
@@ -160,6 +164,7 @@
 		GRP006 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				0615CFC32EE0EAE7003F1843 /* AnalyticsService.swift */,
 				SRC009 /* SupabaseService.swift */,
 				SRC010 /* DictionaryService.swift */,
 				SRC011 /* BookSearchService.swift */,
@@ -290,6 +295,7 @@
 			packageReferences = (
 				0615CFB62EDF74D2003F1843 /* XCRemoteSwiftPackageReference "supabase-swift" */,
 				0615CFBC2EE0D29D003F1843 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */,
+				0615CFC02EE0E76C003F1843 /* XCRemoteSwiftPackageReference "mixpanel-swift" */,
 			);
 			productRefGroup = GRP002 /* Products */;
 			projectDirPath = "";
@@ -324,6 +330,7 @@
 				VM001 /* AuthViewModel.swift in Sources */,
 				VM002 /* BooksViewModel.swift in Sources */,
 				VM003 /* VocabViewModel.swift in Sources */,
+				0615CFC42EE0EAE7003F1843 /* AnalyticsService.swift in Sources */,
 				VM004 /* StudyViewModel.swift in Sources */,
 				VM005 /* UserSessionViewModel.swift in Sources */,
 				SEC001 /* Secrets.swift in Sources */,
@@ -480,6 +487,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"BookVocab/Preview Content\"";
+				DEVELOPMENT_TEAM = 26P3PJ6244;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = BookVocab/Info.plist;
@@ -510,6 +518,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"BookVocab/Preview Content\"";
+				DEVELOPMENT_TEAM = 26P3PJ6244;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = BookVocab/Info.plist;
@@ -572,6 +581,14 @@
 				minimumVersion = 12.14.0;
 			};
 		};
+		0615CFC02EE0E76C003F1843 /* XCRemoteSwiftPackageReference "mixpanel-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/mixpanel/mixpanel-swift";
+			requirement = {
+				branch = master;
+				kind = branch;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -594,6 +611,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 0615CFBC2EE0D29D003F1843 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */;
 			productName = GoogleMobileAds;
+		};
+		0615CFC12EE0E76C003F1843 /* Mixpanel */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0615CFC02EE0E76C003F1843 /* XCRemoteSwiftPackageReference "mixpanel-swift" */;
+			productName = Mixpanel;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

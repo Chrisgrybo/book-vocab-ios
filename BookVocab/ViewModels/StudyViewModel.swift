@@ -282,6 +282,13 @@ class StudyViewModel: ObservableObject {
         showSessionComplete = false
         
         logger.debug("🎴 Session started: first word is '\(self.studyWords[0].word)'")
+        
+        // Track study session started
+        AnalyticsService.shared.trackStudySessionStarted(
+            mode: "flashcards",
+            source: source.displayName,
+            wordCount: words.count
+        )
     }
     
     /// Starts a new quiz session.
@@ -320,6 +327,13 @@ class StudyViewModel: ObservableObject {
         showSessionComplete = false
         
         logger.debug("❓ Quiz started with \(self.quizQuestions.count) questions")
+        
+        // Track quiz session started
+        AnalyticsService.shared.trackStudySessionStarted(
+            mode: mode.rawValue,
+            source: source.displayName,
+            wordCount: quizQuestions.count
+        )
     }
     
     /// Ends the current study session and calculates results.
@@ -348,6 +362,16 @@ class StudyViewModel: ObservableObject {
         )
         
         logger.info("📚 Session complete: \(correctCount)/\(totalCount), mastered \(self.sessionMasteredWords.count) words")
+        
+        // Track study session completed
+        AnalyticsService.shared.trackStudySessionCompleted(
+            mode: selectedMode.rawValue,
+            source: selectedSource.displayName,
+            wordCount: totalCount,
+            correctCount: correctCount,
+            masteredCount: sessionMasteredWords.count,
+            durationSeconds: duration
+        )
         
         isSessionActive = false
         showSessionComplete = true
@@ -406,6 +430,13 @@ class StudyViewModel: ObservableObject {
         sessionMasteredWords.insert(word.id)
         logger.info("✅ User marked '\(word.word)' as 'got it' (session total: \(self.sessionMasteredWords.count))")
         
+        // Track flashcard swipe right
+        AnalyticsService.shared.trackFlashcardSwipe(
+            direction: "right",
+            cardIndex: currentIndex,
+            totalCards: studyWords.count
+        )
+        
         // NOTE: We no longer automatically mark words as mastered here.
         // Users will manually select which words to master from the summary screen.
         
@@ -418,6 +449,13 @@ class StudyViewModel: ObservableObject {
         
         sessionSkippedWords.insert(word.id)
         logger.debug("⏭️ Skipped '\(word.word)'")
+        
+        // Track flashcard swipe left
+        AnalyticsService.shared.trackFlashcardSwipe(
+            direction: "left",
+            cardIndex: currentIndex,
+            totalCards: studyWords.count
+        )
         
         nextWord()
     }
@@ -447,6 +485,14 @@ class StudyViewModel: ObservableObject {
         let status = question.isCorrect == true ? "CORRECT" : "INCORRECT"
         logger.info("❓ Answer submitted for '\(question.word.word)': \(status)")
         logger.debug("❓ User answered: '\(answer)', Correct: '\(question.correctAnswer)'")
+        
+        // Track quiz answer
+        AnalyticsService.shared.trackQuizAnswer(
+            isCorrect: question.isCorrect == true,
+            questionIndex: currentQuestionIndex,
+            totalQuestions: quizQuestions.count,
+            questionType: selectedMode.rawValue
+        )
         
         // NOTE: We no longer automatically mark words as mastered here.
         // Users will manually select which words to master from the summary screen.
@@ -526,6 +572,14 @@ class StudyViewModel: ObservableObject {
         logger.info("   - Successfully marked: \(successCount)")
         logger.info("   - Already mastered (skipped): \(skipCount)")
         logger.info("   - Not found: \(notFoundCount)")
+        
+        // Track words mastered from session summary
+        if successCount > 0 {
+            AnalyticsService.shared.track(.wordsMasteredFromSession, properties: [
+                AnalyticsProperty.masteredCount.rawValue: successCount,
+                AnalyticsProperty.studyMode.rawValue: selectedMode.rawValue
+            ])
+        }
     }
     
     /// Returns the words studied in the current flashcard session with their "got it" status.

@@ -188,6 +188,13 @@ class BooksViewModel: ObservableObject {
             logger.debug("📚 Offline - book saved to cache, will sync later")
         }
         
+        // Track book added event
+        AnalyticsService.shared.trackBookAdded(
+            title: book.title,
+            author: book.author,
+            hasCover: book.coverImageUrl != nil
+        )
+        
         isLoading = false
     }
     
@@ -236,6 +243,9 @@ class BooksViewModel: ObservableObject {
         } else {
             logger.debug("📚 Offline - deletion saved to cache, will sync later")
         }
+        
+        // Track book deleted event
+        AnalyticsService.shared.trackBookDeleted(title: book.title)
         
         isLoading = false
     }

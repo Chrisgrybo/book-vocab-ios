@@ -129,12 +129,27 @@ class UserSessionViewModel: ObservableObject {
             currentUser = authResponse.user
             isAuthenticated = true
             
+            // Track successful sign up
+            if let userId = authResponse.user.id.uuidString as String? {
+                AnalyticsService.shared.trackSignUp(userId: userId)
+            }
+            
         } catch let error as AuthError {
             // Handle Supabase-specific auth errors with user-friendly messages
             errorMessage = mapAuthError(error)
+            
+            // Track sign up failure
+            AnalyticsService.shared.track(.signUpFailed, properties: [
+                "error": error.localizedDescription
+            ])
         } catch {
             // Handle any other unexpected errors
             errorMessage = "Sign up failed: \(error.localizedDescription)"
+            
+            // Track sign up failure
+            AnalyticsService.shared.track(.signUpFailed, properties: [
+                "error": error.localizedDescription
+            ])
         }
         
         isLoading = false
@@ -162,12 +177,25 @@ class UserSessionViewModel: ObservableObject {
             currentUser = session.user
             isAuthenticated = true
             
+            // Track successful login
+            AnalyticsService.shared.trackLogin(userId: session.user.id.uuidString)
+            
         } catch let error as AuthError {
             // Handle Supabase-specific auth errors with user-friendly messages
             errorMessage = mapAuthError(error)
+            
+            // Track login failure
+            AnalyticsService.shared.track(.loginFailed, properties: [
+                "error": error.localizedDescription
+            ])
         } catch {
             // Handle any other unexpected errors
             errorMessage = "Sign in failed: \(error.localizedDescription)"
+            
+            // Track login failure
+            AnalyticsService.shared.track(.loginFailed, properties: [
+                "error": error.localizedDescription
+            ])
         }
         
         isLoading = false
@@ -188,6 +216,9 @@ class UserSessionViewModel: ObservableObject {
             // Tell Supabase to invalidate the current session
             try await supabase.auth.signOut()
             
+            // Track logout before clearing state
+            AnalyticsService.shared.trackLogout()
+            
             // Clear our local state
             currentUser = nil
             isAuthenticated = false
@@ -196,6 +227,10 @@ class UserSessionViewModel: ObservableObject {
             // Even if sign out fails on the server, clear local state
             // This ensures the user can still "log out" locally
             errorMessage = "Sign out failed: \(error.localizedDescription)"
+            
+            // Still track logout and reset analytics
+            AnalyticsService.shared.trackLogout()
+            
             currentUser = nil
             isAuthenticated = false
         }

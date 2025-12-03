@@ -12,6 +12,7 @@
 //  - Supabase provides backend authentication and database
 //  - Core Data provides offline caching
 //  - AdMob provides monetization (MREC banners + interstitials)
+//  - Mixpanel provides analytics tracking
 //
 
 import SwiftUI
@@ -50,6 +51,9 @@ struct BookVocabApp: App {
     /// Ad manager for handling AdMob ads.
     @StateObject private var adManager = AdManager.shared
     
+    /// Analytics service for tracking user behavior.
+    @StateObject private var analytics = AnalyticsService.shared
+    
     // MARK: - Initialization
     
     init() {
@@ -59,6 +63,10 @@ struct BookVocabApp: App {
         // Initialize Google Mobile Ads SDK
         // This must be called before loading any ads
         AdManager.shared.initialize()
+        
+        // Initialize Mixpanel Analytics
+        // Uses Secrets.mixpanelToken - events are queued offline if network unavailable
+        AnalyticsService.shared.initialize()
     }
     
     // MARK: - Body
@@ -80,6 +88,9 @@ struct BookVocabApp: App {
                             // Set user ID for fetching user-specific data
                             if let userId = session.currentUser?.id {
                                 booksViewModel.setUserId(userId)
+                                
+                                // Identify user for analytics
+                                AnalyticsService.shared.identify(userId: userId.uuidString)
                             }
                         }
                 } else {
