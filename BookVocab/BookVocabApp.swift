@@ -11,15 +11,18 @@
 //  - Environment objects share state across the view hierarchy
 //  - Supabase provides backend authentication and database
 //  - Core Data provides offline caching
+//  - AdMob provides monetization (MREC banners + interstitials)
 //
 
 import SwiftUI
+import GoogleMobileAds
 
 /// The main application struct that serves as the entry point for Book Vocab.
 ///
 /// This struct:
 /// - Creates and owns the shared ViewModels as @StateObject
 /// - Initializes offline caching services
+/// - Initializes AdMob SDK for monetization
 /// - Determines which view to show based on authentication state
 /// - Injects ViewModels into the environment for child views
 @main
@@ -44,11 +47,18 @@ struct BookVocabApp: App {
     /// Sync service for managing data synchronization.
     @StateObject private var syncService = SyncService.shared
     
+    /// Ad manager for handling AdMob ads.
+    @StateObject private var adManager = AdManager.shared
+    
     // MARK: - Initialization
     
     init() {
         // Initialize persistence controller to set up Core Data stack
         _ = PersistenceController.shared
+        
+        // Initialize Google Mobile Ads SDK
+        // This must be called before loading any ads
+        AdManager.shared.initialize()
     }
     
     // MARK: - Body

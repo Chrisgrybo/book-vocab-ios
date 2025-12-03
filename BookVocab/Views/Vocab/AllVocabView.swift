@@ -254,12 +254,13 @@ struct AllVocabView: View {
             }
             .padding(.horizontal, AppSpacing.horizontalPadding)
             
-            // Words
+            // Words with interleaved ads
             if displayedWords.isEmpty {
                 noResultsView
             } else {
                 LazyVStack(spacing: AppSpacing.sm) {
                     ForEach(Array(displayedWords.enumerated()), id: \.element.id) { index, word in
+                        // Word card
                         AllWordsCardView(
                             word: word,
                             bookTitle: bookTitle(for: word)
@@ -269,6 +270,14 @@ struct AllVocabView: View {
                         .animation(
                             AppAnimation.spring.delay(Double(index) * 0.02),
                             value: hasAppeared
+                        )
+                        
+                        // Insert MREC ad every 5 words
+                        ConditionalAdView(
+                            index: index,
+                            interval: 5,
+                            minimumItems: 5,
+                            totalItems: displayedWords.count
                         )
                     }
                 }

@@ -294,24 +294,29 @@ class VocabViewModel: ObservableObject {
     }
     
     /// Sets the mastered status of a vocabulary word to a specific value.
+    /// NOTE: This function ONLY updates the mastered status. It does NOT delete the word.
     /// - Parameters:
     ///   - word: The word to update
     ///   - mastered: The new mastered status
     func setMastered(_ word: VocabWord, to mastered: Bool) async {
         guard let index = allWords.firstIndex(where: { $0.id == word.id }) else {
-            logger.warning("📝 setMastered: Word '\(word.word)' not found in allWords")
+            logger.warning("📝 setMastered: Word '\(word.word)' (ID: \(word.id.uuidString.prefix(8))) not found in allWords array")
+            logger.debug("📝 allWords contains \(self.allWords.count) words")
             return
         }
         
-        logger.info("📝 Setting mastered status for '\(word.word)' to \(mastered)")
+        let previousStatus = allWords[index].mastered
+        logger.info("📝 Setting mastered status for '\(word.word)' from \(previousStatus) to \(mastered)")
         
-        // Update local array
+        // Update local array (in-memory)
         allWords[index].mastered = mastered
+        logger.debug("📝 Updated in-memory allWords[\(index)].mastered = \(mastered)")
         
-        // Update cache (will queue for sync)
+        // Update cache (Core Data - will queue for Supabase sync)
         cacheService.updateMasteredStatus(word.id, mastered: mastered)
+        logger.debug("📝 Updated cache for word ID: \(word.id.uuidString.prefix(8))")
         
-        logger.debug("📝 Set '\(word.word)' mastered status to \(mastered)")
+        logger.info("✅ Successfully set '\(word.word)' mastered status to \(mastered)")
     }
     
     /// Deletes a vocabulary word.

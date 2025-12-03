@@ -234,6 +234,9 @@ struct BookDetailView: View {
     
     // MARK: - Words Section
     
+    /// Premium status for ad display
+    @AppStorage("isPremium") private var isPremium: Bool = false
+    
     private var wordsSection: some View {
         VStack(alignment: .leading, spacing: AppSpacing.md) {
             // Header
@@ -256,13 +259,19 @@ struct BookDetailView: View {
                     .padding(.horizontal, AppSpacing.horizontalPadding)
             }
             
-            // Words list
+            // Words list with ads
             if filteredWords.isEmpty {
                 emptyWordsState
                     .padding(.top, AppSpacing.xl)
             } else {
                 LazyVStack(spacing: AppSpacing.sm) {
+                    // Top MREC ad (only if not premium and has words)
+                    if !isPremium && !filteredWords.isEmpty {
+                        AdMRECView()
+                    }
+                    
                     ForEach(Array(filteredWords.enumerated()), id: \.element.id) { index, word in
+                        // Word card
                         WordCardView(word: word)
                             .opacity(hasAppeared ? 1 : 0)
                             .offset(y: hasAppeared ? 0 : 20)
@@ -270,6 +279,14 @@ struct BookDetailView: View {
                                 AppAnimation.spring.delay(Double(index) * 0.03),
                                 value: hasAppeared
                             )
+                        
+                        // Insert MREC ad every 5 words
+                        ConditionalAdView(
+                            index: index,
+                            interval: 5,
+                            minimumItems: 5,
+                            totalItems: filteredWords.count
+                        )
                     }
                 }
                 .padding(.horizontal, AppSpacing.horizontalPadding)
@@ -667,3 +684,4 @@ private struct SizePreferenceKey: PreferenceKey {
             .environmentObject(VocabViewModel())
     }
 }
+

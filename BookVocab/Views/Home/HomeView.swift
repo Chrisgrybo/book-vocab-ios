@@ -177,9 +177,10 @@ struct HomeView: View {
             .padding(.horizontal, AppSpacing.horizontalPadding)
             .padding(.top, AppSpacing.lg)
             
-            // Book list
+            // Book list with interleaved ads
             LazyVStack(spacing: AppSpacing.md) {
                 ForEach(Array(filteredBooks.enumerated()), id: \.element.id) { index, book in
+                    // Book card
                     NavigationLink(destination: BookDetailView(book: book)) {
                         BookCardView(book: book)
                     }
@@ -199,6 +200,15 @@ struct HomeView: View {
                             Label("Delete", systemImage: "trash")
                         }
                     }
+                    
+                    // Insert MREC ad every 5 books (after items 4, 9, 14...)
+                    // Only show if we have at least 5 books and not at the last item
+                    ConditionalAdView(
+                        index: index,
+                        interval: 5,
+                        minimumItems: 5,
+                        totalItems: filteredBooks.count
+                    )
                 }
             }
             .padding(.horizontal, AppSpacing.horizontalPadding)

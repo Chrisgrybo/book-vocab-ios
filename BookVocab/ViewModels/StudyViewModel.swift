@@ -396,20 +396,18 @@ class StudyViewModel: ObservableObject {
         logger.debug("🎴 Moving to previous word: '\(self.currentWord?.word ?? "unknown")'")
     }
     
-    /// Marks the current word as mastered and moves to next.
+    /// Marks the current word as "got it" (user knows it) and moves to next.
+    /// Note: Words are NOT automatically marked as mastered in the database.
+    /// The user can manually select words to master from the session summary screen.
     func markCurrentAsMastered() {
         guard let word = currentWord else { return }
         
+        // Track that user "got" this word in the session
         sessionMasteredWords.insert(word.id)
-        logger.info("✅ Marked '\(word.word)' as mastered (session total: \(self.sessionMasteredWords.count))")
+        logger.info("✅ User marked '\(word.word)' as 'got it' (session total: \(self.sessionMasteredWords.count))")
         
-        // Update the word in the vocab view model
-        Task {
-            if let vm = vocabViewModel, !word.mastered {
-                await vm.toggleMastered(word)
-                logger.debug("✅ Updated mastered status in database for '\(word.word)'")
-            }
-        }
+        // NOTE: We no longer automatically mark words as mastered here.
+        // Users will manually select which words to master from the summary screen.
         
         nextWord()
     }
@@ -427,6 +425,8 @@ class StudyViewModel: ObservableObject {
     // MARK: - Quiz Methods
     
     /// Submits an answer for the current quiz question.
+    /// Note: Words are NOT automatically marked as mastered when correct.
+    /// The user can manually select words to master from the quiz summary screen.
     /// - Parameter answer: The user's answer
     func submitAnswer(_ answer: String) {
         guard currentQuestionIndex < quizQuestions.count else { return }
@@ -448,10 +448,8 @@ class StudyViewModel: ObservableObject {
         logger.info("❓ Answer submitted for '\(question.word.word)': \(status)")
         logger.debug("❓ User answered: '\(answer)', Correct: '\(question.correctAnswer)'")
         
-        // If correct, offer to mark as mastered
-        if question.isCorrect == true {
-            sessionMasteredWords.insert(question.word.id)
-        }
+        // NOTE: We no longer automatically mark words as mastered here.
+        // Users will manually select which words to master from the summary screen.
     }
     
     /// Moves to the next quiz question.
@@ -471,6 +469,71 @@ class StudyViewModel: ObservableObject {
     func calculateScorePercentage() -> Int {
         guard !quizQuestions.isEmpty else { return 0 }
         return Int((Double(correctAnswersCount) / Double(quizQuestions.count)) * 100)
+    }
+    
+    /// Marks multiple words as mastered from the summary screen (quiz or flashcards).
+    /// Called when the user taps "Save" on the summary screen.
+    /// NOTE: This function ONLY updates mastered status. It does NOT delete any words.
+    /// - Parameter wordIds: Set of word IDs to mark as mastered
+    func markWordsAsMasteredFromSummary(wordIds: Set<UUID>) async {
+        guard let vm = vocabViewModel else {
+            logger.warning("❌ No VocabViewModel available to update mastered status")
+            return
+        }
+        
+        guard !wordIds.isEmpty else {
+            logger.debug("📝 No words to mark as mastered, skipping")
+            return
+        }
+        
+        logger.info("✅ Starting to mark \(wordIds.count) words as mastered from summary")
+        logger.debug("📝 Word IDs to mark: \(wordIds.map { $0.uuidString.prefix(8) })")
+        
+        var successCount = 0
+        var skipCount = 0
+        var notFoundCount = 0
+        
+        for wordId in wordIds {
+            // Try to find the word in quiz questions first
+            if let question = quizQuestions.first(where: { $0.word.id == wordId }) {
+                let word = question.word
+                if !word.mastered {
+                    logger.debug("📝 Marking quiz word '\(word.word)' (ID: \(wordId.uuidString.prefix(8))) as mastered")
+                    await vm.setMastered(word, to: true)
+                    successCount += 1
+                } else {
+                    logger.debug("📝 Quiz word '\(word.word)' already mastered, skipping")
+                    skipCount += 1
+                }
+            }
+            // Also check flashcard study words
+            else if let word = studyWords.first(where: { $0.id == wordId }) {
+                if !word.mastered {
+                    logger.debug("📝 Marking flashcard word '\(word.word)' (ID: \(wordId.uuidString.prefix(8))) as mastered")
+                    await vm.setMastered(word, to: true)
+                    successCount += 1
+                } else {
+                    logger.debug("📝 Flashcard word '\(word.word)' already mastered, skipping")
+                    skipCount += 1
+                }
+            } else {
+                logger.warning("⚠️ Word ID \(wordId.uuidString.prefix(8)) not found in quiz questions or study words")
+                notFoundCount += 1
+            }
+        }
+        
+        logger.info("✅ Finished marking words as mastered:")
+        logger.info("   - Successfully marked: \(successCount)")
+        logger.info("   - Already mastered (skipped): \(skipCount)")
+        logger.info("   - Not found: \(notFoundCount)")
+    }
+    
+    /// Returns the words studied in the current flashcard session with their "got it" status.
+    /// - Returns: Array of tuples containing the word and whether the user marked it as "got it"
+    func getFlashcardSessionWords() -> [(word: VocabWord, gotIt: Bool)] {
+        return studyWords.map { word in
+            (word: word, gotIt: sessionMasteredWords.contains(word.id))
+        }
     }
     
     // MARK: - Utility Methods

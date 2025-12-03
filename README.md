@@ -40,9 +40,17 @@ Book Vocab helps users build their vocabulary by collecting and organizing words
 - Go to the **Study** tab
 - Choose a study source (All Words or a specific book)
 - Select a mode:
-  - **Flashcards**: Tap to flip, swipe right to master, swipe left to skip
+  - **Flashcards**: Tap to flip, swipe right if you know it, swipe left to skip
   - **Multiple Choice**: Pick the correct definition
   - **Fill in the Blank**: Type the word from its definition
+
+**After completing a session:**
+- Review all words you studied on the **Summary Screen**
+- **Select which words to mark as mastered** using checkboxes
+- Tap **"Save"** to persist your selections
+- Words you didn't select remain in "learning" mode
+
+> 💡 **New!** Words are no longer auto-marked as mastered. You have full control over which words you've truly learned.
 
 ### 5. Track Your Progress
 - View stats on the Home and Study screens
@@ -101,7 +109,8 @@ BookVocab/
 │   │   ├── FlashcardView.swift  # Flashcard study mode
 │   │   └── QuizView.swift       # Quiz modes (MC & fill-in)
 │   └── Components/
-│       └── Theme.swift          # Design system (colors, spacing, styles)
+│       ├── Theme.swift          # Design system (colors, spacing, styles)
+│       └── AdMRECView.swift     # MREC banner ad component
 └── Services/                     # Backend & offline services
     ├── SupabaseService.swift    # Supabase auth & database
     ├── DictionaryService.swift  # Free Dictionary API
@@ -109,7 +118,8 @@ BookVocab/
     ├── PersistenceController.swift # Core Data stack
     ├── CacheService.swift       # Local caching operations
     ├── NetworkMonitor.swift     # Connectivity detection
-    └── SyncService.swift        # Offline sync management
+    ├── SyncService.swift        # Offline sync management
+    └── AdManager.swift          # AdMob ad management singleton
 ```
 
 ## Features
@@ -140,6 +150,7 @@ BookVocab/
   - 📊 Progress tracking & session summaries
   - 🎯 Study by book or all words
   - 🔄 "Learning only" filter
+  - ✅ **Manual mastery selection** — choose which words to mark as mastered after each session
 - [x] **Offline Caching**
   - Core Data local storage
   - Network connectivity monitoring
@@ -149,15 +160,100 @@ BookVocab/
   - Warm tan & cream color palette with black accents
   - Consistent card styling and spacing
   - Smooth animations throughout
+  - Polished login/signup screen matching app theme
 - [x] **Tab-based Navigation** (Books, Words, Study)
+
+- [x] **AdMob Integration**
+  - MREC (300x250) banner ads in lists
+  - Interstitial ads after study sessions
+  - Premium ad-removal option (`isPremium` flag)
 
 ### 🚧 TODO (Future Enhancements)
 
 - [ ] Push notifications for study reminders
 - [ ] Sign in with Apple
-- [ ] Freemium model with limits, ads, subscriptions
+- [ ] In-app purchases for premium upgrade
 - [ ] Spaced repetition algorithm
 - [ ] Export/import vocabulary lists
+
+## 📺 AdMob Integration
+
+Book Vocab uses Google AdMob for monetization with a premium ad-removal option.
+
+### Ad Placements
+
+#### MREC Banner Ads (300x250)
+- **Home View (Books)**: Inserted after every 5 books
+- **All Words View**: Inserted after every 5 vocabulary words
+- **Book Detail View**: One at the top of the word list, then every 5 words
+
+#### Interstitial Ads
+- **After Study Sessions**: Shown after user taps "Save" on the session summary screen
+- 1.5 second delay to let user see the "saved" confirmation
+- Only displayed after save action, never during active study
+- App returns to study tab after ad is dismissed
+
+### Premium Ad Removal
+
+Users can remove all ads by setting `isPremium = true` (stored in `@AppStorage`):
+
+```swift
+// Check premium status anywhere in the app
+@AppStorage("isPremium") var isPremium: Bool = false
+
+// All ads are wrapped with:
+if !isPremium { AdMRECView() }
+```
+
+### Ad Unit IDs
+
+The app uses **test ad unit IDs** by default. To switch to production:
+
+1. Open `BookVocab/Services/AdManager.swift`
+2. Replace the test IDs with your production IDs:
+
+```swift
+// Current (Test IDs - for development only)
+static let mrecAdUnitID = "ca-app-pub-3940256099942544/6300978111"
+static let interstitialAdUnitID = "ca-app-pub-3940256099942544/1033173712"
+
+// Replace with your production IDs:
+static let mrecAdUnitID = "ca-app-pub-XXXXXXXXXXXXXXXX/YYYYYYYYYY"
+static let interstitialAdUnitID = "ca-app-pub-XXXXXXXXXXXXXXXX/ZZZZZZZZZZ"
+```
+
+### Required Setup
+
+1. **Add Google Mobile Ads SDK** via Swift Package Manager:
+   - In Xcode: File → Add Package Dependencies
+   - URL: `https://github.com/googleads/swift-package-manager-google-mobile-ads`
+   - Add `GoogleMobileAds` product to your target
+
+2. **Configure Info.plist** (required for AdMob):
+   ```xml
+   <key>GADApplicationIdentifier</key>
+   <string>ca-app-pub-XXXXXXXXXXXXXXXX~YYYYYYYYYY</string>
+   <key>SKAdNetworkItems</key>
+   <array>
+       <!-- Add SKAdNetwork IDs from Google's documentation -->
+   </array>
+   ```
+
+3. **App Transport Security** (if needed):
+   ```xml
+   <key>NSAppTransportSecurity</key>
+   <dict>
+       <key>NSAllowsArbitraryLoads</key>
+       <true/>
+   </dict>
+   ```
+
+### Safety Rules
+
+- Ads only show if user has 5+ items (books or words)
+- No multiple ads in a row
+- Interstitials never interrupt active study
+- All ads respect premium status
 
 ## Getting Started
 
@@ -232,6 +328,7 @@ ALTER TABLE vocab_words ENABLE ROW LEVEL SECURITY;
 ## Dependencies
 
 - **[Supabase Swift SDK](https://github.com/supabase/supabase-swift)** - Authentication & database
+- **[Google Mobile Ads SDK](https://github.com/googleads/swift-package-manager-google-mobile-ads)** - AdMob monetization
 - **Core Data** - Local offline caching (built into iOS)
 
 ### External APIs (No SDK Required)

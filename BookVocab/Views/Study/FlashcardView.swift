@@ -46,9 +46,11 @@ struct FlashcardSessionView: View {
                 
                 Group {
                     if studyVM.showSessionComplete {
-                        SessionCompleteContentView(result: studyVM.lastSessionResult) {
-                            dismiss()
-                        }
+                        FlashcardCompleteContentView(
+                            result: studyVM.lastSessionResult,
+                            studyVM: studyVM,
+                            onDismiss: { dismiss() }
+                        )
                     } else if studyVM.studyWords.isEmpty {
                         emptyStateView
                     } else {
@@ -253,6 +255,9 @@ struct FlashcardSessionView: View {
     
     private func startSession() {
         studyVM.vocabViewModel = vocabViewModel
+        
+        // Preload an interstitial ad for when the session ends
+        AdManager.shared.preloadInterstitialIfNeeded()
         
         let words: [VocabWord]
         if learningOnly {
@@ -597,73 +602,461 @@ struct FlowLayoutSimple: View {
     }
 }
 
-// MARK: - Session Complete Content View
+// MARK: - Flashcard Complete Content View
 
-struct SessionCompleteContentView: View {
+struct FlashcardCompleteContentView: View {
     let result: StudySessionResult?
+    
+    /// Reference to the StudyViewModel for marking words as mastered
+    @ObservedObject var studyVM: StudyViewModel
+    
     let onDismiss: () -> Void
     
+    /// Reference to VocabViewModel for persisting mastery status
+    @EnvironmentObject var vocabViewModel: VocabViewModel
+    
+    /// Set of word IDs the user has selected to mark as mastered
+    @State private var selectedForMastery: Set<UUID> = []
+    
+    /// Whether mastery selections have been saved
+    @State private var hasSaved = false
+    
+    /// Whether save operation is in progress
+    @State private var isSaving = false
+    
     @State private var hasAppeared = false
+    @State private var hasTriggeredAd = false
+    
+    /// Premium status for ad display
+    @AppStorage("isPremium") private var isPremium: Bool = false
+    
+    /// Words studied in this session with their "got it" status
+    private var sessionWords: [(word: VocabWord, gotIt: Bool)] {
+        studyVM.getFlashcardSessionWords()
+    }
+    
+    /// Words that can be marked as mastered (not already mastered)
+    private var masterableWords: [VocabWord] {
+        sessionWords.filter { !$0.word.mastered }.map { $0.word }
+    }
+    
+    /// Count of words selected for mastery
+    private var selectedCount: Int {
+        selectedForMastery.count
+    }
+    
+    /// Count of words user marked as "got it"
+    private var gotItCount: Int {
+        sessionWords.filter { $0.gotIt }.count
+    }
+    
+    // MARK: - Body
     
     var body: some View {
-        VStack(spacing: AppSpacing.xxl) {
-            Spacer()
+        ScrollView {
+            VStack(spacing: AppSpacing.lg) {
+                // Celebration header
+                celebrationHeader
+                    .padding(.top, AppSpacing.lg)
+                
+                // Stats row
+                statsRow
+                
+                // Word summary section
+                wordSummarySection
+                
+                // Save and Done buttons
+                actionButtons
+                
+                Spacer(minLength: AppSpacing.xxxl)
+            }
+        }
+        .onAppear {
+            logger.debug("🎬 FlashcardCompleteContentView appeared")
             
-            // Celebration
+            // Pre-select words that user marked as "got it" for convenience
+            for (word, gotIt) in sessionWords where gotIt && !word.mastered {
+                selectedForMastery.insert(word.id)
+            }
+            
+            withAnimation(AppAnimation.bouncy.delay(0.1)) {
+                hasAppeared = true
+            }
+            
+            // NOTE: Ad is now shown AFTER user taps Save, not on appear
+        }
+    }
+    
+    // MARK: - Celebration Header
+    
+    private var celebrationHeader: some View {
+        VStack(spacing: AppSpacing.md) {
+            // Celebration icon
             ZStack {
                 Circle()
                     .fill(AppColors.tanDark.opacity(0.5))
-                    .frame(width: 140, height: 140)
+                    .frame(width: 100, height: 100)
                     .scaleEffect(hasAppeared ? 1 : 0.5)
                     .opacity(hasAppeared ? 1 : 0)
                 
                 Image(systemName: "party.popper.fill")
-                    .font(.system(size: 64))
+                    .font(.system(size: 44))
                     .foregroundStyle(AppColors.warning)
                     .scaleEffect(hasAppeared ? 1 : 0)
             }
             
-            VStack(spacing: AppSpacing.sm) {
+            VStack(spacing: AppSpacing.xs) {
                 Text("Session Complete!")
-                    .font(.largeTitle)
+                    .font(.title2)
                     .fontWeight(.bold)
                 
-                Text("Great job studying today!")
-                    .font(.body)
+                Text("Great job studying!")
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
             .opacity(hasAppeared ? 1 : 0)
-            .offset(y: hasAppeared ? 0 : 20)
-            
-            // Stats
+        }
+    }
+    
+    // MARK: - Stats Row
+    
+    private var statsRow: some View {
+        HStack(spacing: AppSpacing.md) {
             if let result = result {
-                HStack(spacing: AppSpacing.lg) {
-                    CompletionStat(value: "\(result.totalQuestions)", label: "Reviewed", color: .blue)
-                    CompletionStat(value: "\(result.masteredCount)", label: "Mastered", color: AppColors.success)
-                    CompletionStat(value: result.formattedDuration, label: "Time", color: .purple)
+                CompletionStat(value: "\(result.totalQuestions)", label: "Reviewed", color: .blue)
+                CompletionStat(value: "\(gotItCount)", label: "Got It", color: AppColors.success)
+                CompletionStat(value: result.formattedDuration, label: "Time", color: .purple)
+            }
+        }
+        .padding(AppSpacing.md)
+        .cardStyle()
+        .padding(.horizontal, AppSpacing.horizontalPadding)
+        .opacity(hasAppeared ? 1 : 0)
+    }
+    
+    // MARK: - Word Summary Section
+    
+    private var wordSummarySection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
+            // Section header
+            HStack {
+                Text("Words Reviewed")
+                    .font(.headline)
+                    .fontWeight(.bold)
+                
+                Spacer()
+                
+                if !masterableWords.isEmpty && !hasSaved {
+                    Button {
+                        // Select all unmastered words
+                        withAnimation(AppAnimation.quick) {
+                            if selectedForMastery.count == masterableWords.count {
+                                selectedForMastery.removeAll()
+                            } else {
+                                for word in masterableWords {
+                                    selectedForMastery.insert(word.id)
+                                }
+                            }
+                        }
+                    } label: {
+                        Text(selectedForMastery.count == masterableWords.count ? "Deselect All" : "Select All")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundStyle(AppColors.primary)
+                    }
                 }
-                .padding(AppSpacing.lg)
-                .cardStyle()
-                .padding(.horizontal, AppSpacing.xl)
-                .opacity(hasAppeared ? 1 : 0)
-                .offset(y: hasAppeared ? 0 : 20)
+            }
+            
+            // Info text
+            if !hasSaved && !masterableWords.isEmpty {
+                HStack(spacing: AppSpacing.xs) {
+                    Image(systemName: "info.circle.fill")
+                        .font(.caption)
+                    Text("Select words to mark as mastered")
+                        .font(.caption)
+                }
+                .foregroundStyle(.secondary)
+            }
+            
+            // Word list
+            VStack(spacing: AppSpacing.sm) {
+                ForEach(sessionWords, id: \.word.id) { item in
+                    FlashcardWordSummaryRow(
+                        word: item.word,
+                        gotIt: item.gotIt,
+                        isSelected: selectedForMastery.contains(item.word.id),
+                        hasSaved: hasSaved,
+                        onToggle: {
+                            toggleSelection(for: item.word.id)
+                        }
+                    )
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
+            }
+        }
+        .padding(AppSpacing.md)
+        .cardStyle()
+        .padding(.horizontal, AppSpacing.horizontalPadding)
+        .opacity(hasAppeared ? 1 : 0)
+        .offset(y: hasAppeared ? 0 : 20)
+    }
+    
+    // MARK: - Action Buttons
+    
+    private var actionButtons: some View {
+        VStack(spacing: AppSpacing.sm) {
+            // Save button (only if there are words to save)
+            if !hasSaved && !selectedForMastery.isEmpty {
+                Button {
+                    saveSelections()
+                } label: {
+                    HStack(spacing: AppSpacing.sm) {
+                        if isSaving {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        } else {
+                            Image(systemName: "checkmark.seal.fill")
+                            Text("Mark \(selectedCount) Word\(selectedCount == 1 ? "" : "s") as Mastered")
+                        }
+                    }
+                }
+                .buttonStyle(.primary)
+                .disabled(isSaving)
+            }
+            
+            // Saved confirmation
+            if hasSaved && selectedCount > 0 {
+                HStack(spacing: AppSpacing.xs) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(AppColors.success)
+                    Text("\(selectedCount) word\(selectedCount == 1 ? "" : "s") marked as mastered!")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundStyle(AppColors.success)
+                }
+                .padding(AppSpacing.md)
+                .frame(maxWidth: .infinity)
+                .background(AppColors.success.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            }
+            
+            // Done button
+            if hasSaved || selectedForMastery.isEmpty {
+                Button(action: onDismiss) {
+                    Text("Done")
+                }
+                .buttonStyle(.primary)
+            } else {
+                Button(action: onDismiss) {
+                    Text("Done")
+                }
+                .buttonStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, AppSpacing.xl)
+        .opacity(hasAppeared ? 1 : 0)
+    }
+    
+    // MARK: - Actions
+    
+    /// Toggles selection of a word for mastery
+    private func toggleSelection(for wordId: UUID) {
+        guard !hasSaved else { return }
+        
+        // Don't allow toggling already mastered words
+        guard let wordData = sessionWords.first(where: { $0.word.id == wordId }),
+              !wordData.word.mastered else { return }
+        
+        withAnimation(AppAnimation.quick) {
+            if selectedForMastery.contains(wordId) {
+                selectedForMastery.remove(wordId)
+            } else {
+                selectedForMastery.insert(wordId)
+            }
+        }
+    }
+    
+    /// Saves the selected words as mastered, then shows interstitial ad
+    private func saveSelections() {
+        guard !selectedForMastery.isEmpty else { return }
+        
+        isSaving = true
+        let wordsToSave = selectedForMastery
+        logger.info("💾 Saving \(wordsToSave.count) words as mastered from flashcards")
+        
+        Task {
+            // Update mastered status via StudyViewModel
+            // This updates both the local allWords array AND the cache
+            await studyVM.markWordsAsMasteredFromSummary(wordIds: wordsToSave)
+            
+            // NOTE: We intentionally do NOT call fetchAllWords() here
+            // The mastered status has already been updated in:
+            // 1. VocabViewModel.allWords (in-memory)
+            // 2. CacheService (Core Data)
+            // Calling fetchAllWords() could cause race conditions or data issues
+            
+            logger.info("💾 Save operation completed for \(wordsToSave.count) words")
+            
+            await MainActor.run {
+                withAnimation(AppAnimation.spring) {
+                    isSaving = false
+                    hasSaved = true
+                }
+                logger.info("✅ Mastery selections saved successfully - UI updated")
+                
+                // Show interstitial ad AFTER saving is complete
+                showInterstitialAdAfterSave()
+            }
+        }
+    }
+    
+    /// Shows an interstitial ad after the user saves their mastery selections.
+    /// When ad is dismissed (or skipped), the view dismisses and returns to study tab.
+    private func showInterstitialAdAfterSave() {
+        guard !hasTriggeredAd else {
+            logger.debug("🎯 Ad already triggered for this session, skipping")
+            return
+        }
+        
+        guard !isPremium else {
+            logger.debug("🎯 Premium user - no interstitial ad")
+            return
+        }
+        
+        hasTriggeredAd = true
+        logger.info("🎯 Showing interstitial ad after save...")
+        
+        // Capture onDismiss closure before async work
+        let dismissAction = onDismiss
+        
+        // Small delay to let user see the "saved" confirmation
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 second delay
+            
+            logger.info("🎯 Delay complete, attempting to show interstitial...")
+            
+            if let viewController = AdManager.shared.getRootViewController() {
+                logger.info("🎯 Got view controller, showing ad...")
+                AdManager.shared.showInterstitial(from: viewController) {
+                    logger.info("🎯 Interstitial ad dismissed, returning to study tab")
+                    // Use captured dismiss action to avoid [self] capture issues
+                    dismissAction()
+                }
+            } else {
+                logger.warning("⚠️ Could not get root view controller for ad presentation")
+                // Still dismiss the view even if ad couldn't be shown
+                dismissAction()
+            }
+        }
+    }
+}
+
+// MARK: - Flashcard Word Summary Row
+
+/// A row displaying a single word's flashcard result with optional mastery toggle.
+struct FlashcardWordSummaryRow: View {
+    let word: VocabWord
+    let gotIt: Bool
+    let isSelected: Bool
+    let hasSaved: Bool
+    let onToggle: () -> Void
+    
+    /// Whether this word can be toggled for mastery
+    private var canToggle: Bool {
+        !word.mastered && !hasSaved
+    }
+    
+    var body: some View {
+        HStack(spacing: AppSpacing.md) {
+            // Result indicator (Got it or Skipped)
+            ZStack {
+                Circle()
+                    .fill(gotIt ? AppColors.success.opacity(0.15) : AppColors.warning.opacity(0.15))
+                    .frame(width: 32, height: 32)
+                
+                Image(systemName: gotIt ? "checkmark" : "arrow.right")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundStyle(gotIt ? AppColors.success : AppColors.warning)
+            }
+            
+            // Word info
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: AppSpacing.xs) {
+                    Text(word.word)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                    
+                    // Already mastered badge
+                    if word.mastered {
+                        HStack(spacing: 2) {
+                            Image(systemName: "checkmark.seal.fill")
+                            Text("Mastered")
+                        }
+                        .font(.caption2)
+                        .foregroundStyle(AppColors.success)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(AppColors.success.opacity(0.15))
+                        .clipShape(Capsule())
+                    }
+                    
+                    // Got it / Skipped label
+                    if !word.mastered {
+                        Text(gotIt ? "Got it" : "Skipped")
+                            .font(.caption2)
+                            .foregroundStyle(gotIt ? AppColors.success : AppColors.warning)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background((gotIt ? AppColors.success : AppColors.warning).opacity(0.15))
+                            .clipShape(Capsule())
+                    }
+                }
+                
+                Text(word.definition)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
             }
             
             Spacer()
             
-            Button(action: onDismiss) {
-                Text("Done")
+            // Mastery toggle (only for non-mastered words)
+            if !word.mastered {
+                Button(action: onToggle) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(isSelected ? AppColors.success : Color.clear)
+                            .frame(width: 24, height: 24)
+                        
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .stroke(isSelected ? AppColors.success : Color.gray.opacity(0.4), lineWidth: 2)
+                            .frame(width: 24, height: 24)
+                        
+                        if isSelected {
+                            Image(systemName: "checkmark")
+                                .font(.caption)
+                                .fontWeight(.bold)
+                                .foregroundStyle(.white)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .disabled(!canToggle)
+                .opacity(canToggle ? 1 : 0.5)
+                .animation(AppAnimation.quick, value: isSelected)
             }
-            .buttonStyle(.primary)
-            .padding(.horizontal, AppSpacing.xl)
-            .padding(.bottom, AppSpacing.xl)
-            .opacity(hasAppeared ? 1 : 0)
         }
-        .onAppear {
-            withAnimation(AppAnimation.bouncy.delay(0.1)) {
-                hasAppeared = true
-            }
-        }
+        .padding(AppSpacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                .fill(isSelected && !hasSaved ? AppColors.success.opacity(0.05) : Color.gray.opacity(0.05))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                .stroke(isSelected && !hasSaved ? AppColors.success.opacity(0.3) : Color.clear, lineWidth: 1)
+        )
     }
 }
 

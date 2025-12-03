@@ -6,6 +6,7 @@
 //  Provides email/password authentication via Supabase.
 //
 //  Features:
+//  - Modern UI matching app theme
 //  - Email/Password sign up and login
 //  - Form validation with error messages
 //  - Loading states during authentication
@@ -41,6 +42,9 @@ struct LoginView: View {
     
     /// Toggle between login (false) and signup (true) modes.
     @State private var isSignUpMode: Bool = false
+    
+    /// Controls whether the view has appeared (for animations)
+    @State private var hasAppeared: Bool = false
     
     // MARK: - Computed Properties
     
@@ -79,42 +83,67 @@ struct LoginView: View {
     // MARK: - Body
     
     var body: some View {
-        NavigationStack {
+        ZStack {
+            // Background
+            AppColors.groupedBackground
+                .ignoresSafeArea()
+            
             ScrollView {
-                VStack(spacing: 28) {
+                VStack(spacing: 0) {
+                    // Top spacer for vertical centering
+                    Spacer(minLength: 60)
+                    
                     // App logo and title
                     headerSection
+                        .padding(.bottom, AppSpacing.xxl)
                     
-                    // Email and password fields
-                    formSection
-                    
-                    // Validation error message
-                    if let message = validationMessage {
-                        Text(message)
-                            .font(.caption)
-                            .foregroundStyle(.red)
+                    // Form card
+                    VStack(spacing: AppSpacing.lg) {
+                        // Email and password fields
+                        formSection
+                        
+                        // Validation error message
+                        if let message = validationMessage {
+                            validationErrorView(message)
+                        }
+                        
+                        // Login/Signup button
+                        actionButton
+                            .padding(.top, AppSpacing.sm)
                     }
-                    
-                    // Login/Signup button
-                    actionButton
+                    .padding(AppSpacing.lg)
+                    .background(
+                        RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
+                            .fill(AppColors.cardBackground)
+                            .shadow(color: AppShadow.card.color, radius: AppShadow.card.radius, x: 0, y: AppShadow.card.y)
+                    )
+                    .padding(.horizontal, AppSpacing.horizontalPadding)
+                    .opacity(hasAppeared ? 1 : 0)
+                    .offset(y: hasAppeared ? 0 : 20)
                     
                     // Toggle between login and signup
                     toggleModeButton
+                        .padding(.top, AppSpacing.xl)
+                        .opacity(hasAppeared ? 1 : 0)
                     
+                    // Bottom spacer
                     Spacer(minLength: 40)
                 }
-                .padding(.horizontal, 24)
-                .padding(.top, 60)
+                .frame(minHeight: UIScreen.main.bounds.height - 100)
             }
-            .navigationBarHidden(true)
-            // Alert for displaying error messages from the ViewModel
-            .alert("Error", isPresented: .constant(session.errorMessage != nil)) {
-                Button("OK") {
-                    session.clearError()
-                }
-            } message: {
-                Text(session.errorMessage ?? "")
+        }
+        .onAppear {
+            withAnimation(AppAnimation.spring.delay(0.1)) {
+                hasAppeared = true
             }
+        }
+        // Alert for displaying error messages from the ViewModel
+        .alert("Error", isPresented: .constant(session.errorMessage != nil)) {
+            Button("OK") {
+                session.clearError()
+            }
+        } message: {
+            Text(session.errorMessage ?? "")
         }
     }
     
@@ -122,49 +151,121 @@ struct LoginView: View {
     
     /// App logo and welcome text header.
     private var headerSection: some View {
-        VStack(spacing: 16) {
-            // App icon - uses SF Symbol for book
-            Image(systemName: "book.closed.fill")
-                .font(.system(size: 64))
-                .foregroundStyle(.blue)
+        VStack(spacing: AppSpacing.md) {
+            // App icon with decorative background
+            ZStack {
+                Circle()
+                    .fill(AppColors.tanDark.opacity(0.5))
+                    .frame(width: 100, height: 100)
+                
+                Image(systemName: "book.closed.fill")
+                    .font(.system(size: 44))
+                    .foregroundStyle(AppColors.primary)
+            }
+            .scaleEffect(hasAppeared ? 1 : 0.8)
+            .opacity(hasAppeared ? 1 : 0)
             
             // App name
             Text("Book Vocab")
-                .font(.largeTitle)
-                .fontWeight(.bold)
+                .font(.system(size: 32, weight: .bold, design: .serif))
+                .foregroundStyle(AppColors.primary)
             
             // Context-aware subtitle
             Text(isSignUpMode ? "Create your account" : "Welcome back")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
+        .animation(AppAnimation.smooth, value: isSignUpMode)
     }
     
     /// Email and password input fields section.
     private var formSection: some View {
-        VStack(spacing: 16) {
-            // Email field with appropriate keyboard and content type
-            TextField("Email", text: $email)
-                .textFieldStyle(.roundedBorder)
-                .textContentType(.emailAddress)
-                .keyboardType(.emailAddress)
-                .autocapitalization(.none)
-                .autocorrectionDisabled()
+        VStack(spacing: AppSpacing.md) {
+            // Email field
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                Text("Email")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+                
+                HStack(spacing: AppSpacing.sm) {
+                    Image(systemName: "envelope.fill")
+                        .font(.subheadline)
+                        .foregroundStyle(.tertiary)
+                    
+                    TextField("your@email.com", text: $email)
+                        .textContentType(.emailAddress)
+                        .keyboardType(.emailAddress)
+                        .autocapitalization(.none)
+                        .autocorrectionDisabled()
+                }
+                .padding(AppSpacing.md)
+                .background(AppColors.groupedBackground)
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+            }
             
-            // Password field with secure entry
-            // NOTE: .textContentType(.none) disables AutoFill for testing
-            SecureField("Password", text: $password)
-                .textFieldStyle(.roundedBorder)
-                .textContentType(.none)
+            // Password field
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                Text("Password")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+                
+                HStack(spacing: AppSpacing.sm) {
+                    Image(systemName: "lock.fill")
+                        .font(.subheadline)
+                        .foregroundStyle(.tertiary)
+                    
+                    // NOTE: .textContentType(.none) disables AutoFill for testing
+                    SecureField("Enter password", text: $password)
+                        .textContentType(.none)
+                }
+                .padding(AppSpacing.md)
+                .background(AppColors.groupedBackground)
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+            }
             
             // Confirm password field (only shown in signup mode)
             if isSignUpMode {
-                // NOTE: .textContentType(.none) disables AutoFill for testing
-                SecureField("Confirm Password", text: $confirmPassword)
-                    .textFieldStyle(.roundedBorder)
-                    .textContentType(.none)
+                VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                    Text("Confirm Password")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.secondary)
+                    
+                    HStack(spacing: AppSpacing.sm) {
+                        Image(systemName: "lock.fill")
+                            .font(.subheadline)
+                            .foregroundStyle(.tertiary)
+                        
+                        // NOTE: .textContentType(.none) disables AutoFill for testing
+                        SecureField("Confirm password", text: $confirmPassword)
+                            .textContentType(.none)
+                    }
+                    .padding(AppSpacing.md)
+                    .background(AppColors.groupedBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
+        .animation(AppAnimation.smooth, value: isSignUpMode)
+    }
+    
+    /// Validation error message view
+    private func validationErrorView(_ message: String) -> some View {
+        HStack(spacing: AppSpacing.xs) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.caption)
+            Text(message)
+                .font(.caption)
+        }
+        .foregroundStyle(AppColors.error)
+        .padding(.horizontal, AppSpacing.md)
+        .padding(.vertical, AppSpacing.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppColors.error.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
     }
     
     /// Primary action button for Login or Sign Up.
@@ -182,39 +283,47 @@ struct LoginView: View {
                 }
             }
         } label: {
-            // Show loading spinner or button text
-            if session.isLoading {
-                ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-            } else {
-                Text(isSignUpMode ? "Create Account" : "Sign In")
-                    .fontWeight(.semibold)
+            HStack(spacing: AppSpacing.sm) {
+                // Show loading spinner or button text
+                if session.isLoading {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                } else {
+                    Image(systemName: isSignUpMode ? "person.badge.plus" : "arrow.right.circle.fill")
+                        .font(.headline)
+                    Text(isSignUpMode ? "Create Account" : "Sign In")
+                        .fontWeight(.semibold)
+                }
             }
+            .frame(maxWidth: .infinity)
+            .frame(height: 52)
+            .background(
+                RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                    .fill(isFormValid ? AppColors.primary : Color.gray.opacity(0.3))
+            )
+            .foregroundStyle(.white)
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: 50)
-        .background(isFormValid ? Color.blue : Color.gray.opacity(0.5))
-        .foregroundStyle(.white)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
         .disabled(!isFormValid || session.isLoading)
+        .animation(AppAnimation.smooth, value: isFormValid)
+        .animation(AppAnimation.smooth, value: session.isLoading)
     }
     
     /// Button to toggle between login and signup modes.
     private var toggleModeButton: some View {
         Button {
-            withAnimation(.easeInOut(duration: 0.2)) {
+            withAnimation(AppAnimation.smooth) {
                 isSignUpMode.toggle()
                 // Clear password fields when switching modes for security
                 password = ""
                 confirmPassword = ""
             }
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: AppSpacing.xxs) {
                 Text(isSignUpMode ? "Already have an account?" : "Don't have an account?")
                     .foregroundStyle(.secondary)
                 Text(isSignUpMode ? "Sign In" : "Sign Up")
                     .fontWeight(.semibold)
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(AppColors.primary)
             }
             .font(.subheadline)
         }
