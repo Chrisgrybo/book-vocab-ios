@@ -38,6 +38,10 @@ struct HomeView: View {
     @State private var showingAddBook: Bool = false
     @State private var searchText: String = ""
     @State private var hasAppeared: Bool = false
+    @State private var bookToDelete: Book?
+    @State private var showDeleteConfirmation: Bool = false
+    @State private var showDeleteError: Bool = false
+    @State private var deleteErrorMessage: String = ""
     
     // MARK: - Computed Properties
     
@@ -58,7 +62,6 @@ struct HomeView: View {
         return "Reader"
     }
     
-    private var totalBooks: Int { booksViewModel.books.count }
     private var totalWords: Int { vocabViewModel.totalWordCount }
     private var masteredWords: Int { vocabViewModel.masteredCount }
     
@@ -66,27 +69,55 @@ struct HomeView: View {
     
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 0) {
-                    // Header with greeting and stats
-                    headerSection
-                    
-                    // Main content
-                    if booksViewModel.books.isEmpty {
-                        emptyStateView
-                            .padding(.top, AppSpacing.xxxl)
-                    } else {
-                        booksSection
+            Group {
+                if booksViewModel.books.isEmpty {
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            headerSection
+                            emptyStateView
+                                .padding(.top, AppSpacing.xxxl)
+                        }
                     }
+                } else {
+                    List {
+                        // Header section
+                        Section {
+                            headerSection
+                        }
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        
+                        // Books section with swipe actions
+                        Section {
+                            booksListContent
+                        } header: {
+                            HStack {
+                                Text("My Library")
+                                    .font(.title3)
+                                    .fontWeight(.bold)
+                                    .foregroundStyle(.primary)
+                                
+                                Spacer()
+                                
+                                Text("\(filteredBooks.count) books")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .textCase(nil)
+                            .padding(.vertical, AppSpacing.sm)
+                        }
+                        .listRowInsets(EdgeInsets(top: 4, leading: AppSpacing.horizontalPadding, bottom: 4, trailing: AppSpacing.horizontalPadding))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                    }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
                 }
             }
             .background(AppColors.groupedBackground)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    profileButton
-                }
-                
                 ToolbarItem(placement: .topBarTrailing) {
                     addButton
                 }
@@ -94,6 +125,44 @@ struct HomeView: View {
             .searchable(text: $searchText, prompt: "Search books...")
             .sheet(isPresented: $showingAddBook) {
                 AddBookView()
+            }
+            // Delete confirmation dialog
+            .confirmationDialog(
+                "Delete Book",
+                isPresented: $showDeleteConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Delete Book & Words", role: .destructive) {
+                    if let book = bookToDelete {
+                        Task {
+                            await deleteBook(book, deleteWords: true)
+                        }
+                    }
+                }
+                Button("Delete Book Only", role: .destructive) {
+                    if let book = bookToDelete {
+                        Task {
+                            await deleteBook(book, deleteWords: false)
+                        }
+                    }
+                }
+                Button("Cancel", role: .cancel) {
+                    bookToDelete = nil
+                }
+            } message: {
+                if let book = bookToDelete {
+                    let wordCount = vocabViewModel.fetchWords(forBook: book.id).count
+                    if wordCount > 0 {
+                        Text("This book has \(wordCount) vocabulary words. Would you like to delete them too?")
+                    } else {
+                        Text("Are you sure you want to delete \"\(book.title)\"?")
+                    }
+                }
+            }
+            .alert("Delete Failed", isPresented: $showDeleteError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(deleteErrorMessage)
             }
             .refreshable {
                 await booksViewModel.fetchBooks()
@@ -158,62 +227,68 @@ struct HomeView: View {
         .offset(y: hasAppeared ? 0 : 20)
     }
     
-    // MARK: - Books Section
+    // MARK: - Books List Content (with swipe actions)
     
-    private var booksSection: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.md) {
-            // Section header
-            HStack {
-                Text("My Library")
-                    .font(.title3)
-                    .fontWeight(.bold)
-                
-                Spacer()
-                
-                Text("\(filteredBooks.count) books")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, AppSpacing.horizontalPadding)
-            .padding(.top, AppSpacing.lg)
+    @AppStorage("isPremium") private var isPremium: Bool = false
+    
+    @ViewBuilder
+    private var booksListContent: some View {
+        ForEach(Array(filteredBooks.enumerated()), id: \.element.id) { index, book in
+            // Each book row as a NavigationLink with hidden chevron
+            BookRowView(
+                book: book,
+                hasAppeared: hasAppeared,
+                animationDelay: Double(index) * 0.05,
+                onDelete: {
+                    bookToDelete = book
+                    showDeleteConfirmation = true
+                }
+            )
             
-            // Book list with interleaved ads
-            LazyVStack(spacing: AppSpacing.md) {
-                ForEach(Array(filteredBooks.enumerated()), id: \.element.id) { index, book in
-                    // Book card
-                    NavigationLink(destination: BookDetailView(book: book)) {
-                        BookCardView(book: book)
-                    }
-                    .buttonStyle(.plain)
-                    .opacity(hasAppeared ? 1 : 0)
-                    .offset(y: hasAppeared ? 0 : 30)
-                    .animation(
-                        AppAnimation.spring.delay(Double(index) * 0.05),
-                        value: hasAppeared
-                    )
-                    .contextMenu {
-                        Button(role: .destructive) {
-                            Task {
-                                await booksViewModel.deleteBook(book)
-                            }
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
-                    }
-                    
-                    // Insert MREC ad every 5 books (after items 4, 9, 14...)
-                    // Only show if we have at least 5 books and not at the last item
-                    ConditionalAdView(
-                        index: index,
-                        interval: 5,
-                        minimumItems: 5,
-                        totalItems: filteredBooks.count
-                    )
+            // Insert MREC ad every 5 books
+            if shouldShowAdInHome(at: index) {
+                AdMRECView()
+                    .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                    .listRowBackground(Color.clear)
+            }
+        }
+    }
+    
+    /// Determines if an ad should be shown after the given index.
+    private func shouldShowAdInHome(at index: Int) -> Bool {
+        guard !isPremium else { return false }
+        guard filteredBooks.count >= 5 else { return false }
+        guard index < filteredBooks.count - 1 else { return false }
+        return (index + 1) % 5 == 0
+    }
+    
+    // MARK: - Actions
+    
+    /// Deletes a book with optional associated words deletion.
+    private func deleteBook(_ book: Book, deleteWords: Bool) async {
+        logger.info("📚 Deleting book: '\(book.title)', deleteWords: \(deleteWords)")
+        
+        withAnimation(AppAnimation.spring) {
+            // Delete associated words if requested
+            if deleteWords {
+                Task {
+                    await vocabViewModel.deleteWords(forBook: book.id)
                 }
             }
-            .padding(.horizontal, AppSpacing.horizontalPadding)
-            .padding(.bottom, AppSpacing.xxxl)
+            
+            // Delete the book
+            Task {
+                await booksViewModel.deleteBook(book)
+            }
         }
+        
+        // Check for errors
+        if let error = booksViewModel.errorMessage {
+            deleteErrorMessage = error
+            showDeleteError = true
+        }
+        
+        bookToDelete = nil
     }
     
     // MARK: - Empty State
@@ -256,34 +331,6 @@ struct HomeView: View {
     }
     
     // MARK: - Toolbar Items
-    
-    private var profileButton: some View {
-        Menu {
-            Section {
-                Label(session.currentUser?.email ?? "User", systemImage: "person.circle")
-            }
-            
-            Section {
-                Label("\(totalBooks) books", systemImage: "book.closed.fill")
-                Label("\(totalWords) words learned", systemImage: "textformat.abc")
-                Label("\(masteredWords) mastered", systemImage: "checkmark.circle.fill")
-            }
-            
-            Divider()
-            
-            Button(role: .destructive) {
-                Task {
-                    await session.signOut()
-                }
-            } label: {
-                Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
-            }
-        } label: {
-            Image(systemName: "person.circle.fill")
-                .font(.title2)
-                .foregroundStyle(AppColors.primary)
-        }
-    }
     
     private var addButton: some View {
         Button {
@@ -433,6 +480,45 @@ struct BookCardView: View {
                     .font(.system(size: 8, weight: .medium))
                     .foregroundStyle(AppColors.primary.opacity(0.4))
                     .lineLimit(1)
+            }
+        }
+    }
+}
+
+// MARK: - Book Row View (Individual swipe handling)
+
+/// A single book row with navigation and swipe-to-delete.
+/// Each row handles its own swipe state independently.
+struct BookRowView: View {
+    let book: Book
+    let hasAppeared: Bool
+    let animationDelay: Double
+    let onDelete: () -> Void
+    
+    var body: some View {
+        // NavigationLink with hidden chevron using ZStack overlay technique
+        ZStack {
+            // Hidden NavigationLink for navigation
+            NavigationLink(destination: BookDetailView(book: book)) {
+                EmptyView()
+            }
+            .opacity(0)
+            
+            // Visible book card
+            BookCardView(book: book)
+        }
+        .opacity(hasAppeared ? 1 : 0)
+        .offset(y: hasAppeared ? 0 : 30)
+        .animation(
+            AppAnimation.spring.delay(animationDelay),
+            value: hasAppeared
+        )
+        // Swipe LEFT to reveal Delete - applies only to this row
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive) {
+                onDelete()
+            } label: {
+                Label("Delete", systemImage: "trash")
             }
         }
     }

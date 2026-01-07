@@ -46,6 +46,9 @@ struct LoginView: View {
     /// Controls whether the view has appeared (for animations)
     @State private var hasAppeared: Bool = false
     
+    /// Shows the forgot password sheet
+    @State private var showForgotPassword: Bool = false
+    
     // MARK: - Computed Properties
     
     /// Validates that all required fields are properly filled.
@@ -121,9 +124,16 @@ struct LoginView: View {
                     .opacity(hasAppeared ? 1 : 0)
                     .offset(y: hasAppeared ? 0 : 20)
                     
+                    // Forgot password link (only in login mode)
+                    if !isSignUpMode {
+                        forgotPasswordButton
+                            .padding(.top, AppSpacing.md)
+                            .opacity(hasAppeared ? 1 : 0)
+                    }
+                    
                     // Toggle between login and signup
                     toggleModeButton
-                        .padding(.top, AppSpacing.xl)
+                        .padding(.top, isSignUpMode ? AppSpacing.xl : AppSpacing.lg)
                         .opacity(hasAppeared ? 1 : 0)
                     
                     // Bottom spacer
@@ -306,6 +316,22 @@ struct LoginView: View {
         .disabled(!isFormValid || session.isLoading)
         .animation(AppAnimation.smooth, value: isFormValid)
         .animation(AppAnimation.smooth, value: session.isLoading)
+    }
+    
+    /// Forgot password button (shown only in login mode).
+    private var forgotPasswordButton: some View {
+        Button {
+            showForgotPassword = true
+        } label: {
+            Text("Forgot Password?")
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundStyle(AppColors.primary)
+        }
+        .sheet(isPresented: $showForgotPassword) {
+            ForgotPasswordView()
+                .environmentObject(session)
+        }
     }
     
     /// Button to toggle between login and signup modes.

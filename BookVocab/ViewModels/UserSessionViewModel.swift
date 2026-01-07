@@ -238,6 +238,133 @@ class UserSessionViewModel: ObservableObject {
         isLoading = false
     }
     
+    // MARK: - Password Management
+    
+    /// Changes the user's password after verifying the current password.
+    ///
+    /// This method:
+    /// 1. Re-authenticates the user with their current password
+    /// 2. Updates to the new password if verification succeeds
+    ///
+    /// - Parameters:
+    ///   - currentPassword: The user's current password for verification
+    ///   - newPassword: The new password to set
+    /// - Throws: An error if verification fails or password update fails
+    func changePassword(currentPassword: String, newPassword: String) async throws {
+        guard let email = currentUser?.email else {
+            throw PasswordError.noUserEmail
+        }
+        
+        // First, verify the current password by attempting to sign in
+        // This ensures the user knows their current password before changing it
+        do {
+            _ = try await supabase.auth.signIn(
+                email: email,
+                password: currentPassword
+            )
+        } catch {
+            throw PasswordError.incorrectCurrentPassword
+        }
+        
+        // Current password verified, now update to new password
+        do {
+            try await supabase.auth.update(user: UserAttributes(password: newPassword))
+            
+            // Track password change
+            AnalyticsService.shared.track(.login, properties: [
+                "action": "password_changed"
+            ])
+            
+        } catch let error as AuthError {
+            throw PasswordError.updateFailed(mapAuthError(error))
+        } catch {
+            throw PasswordError.updateFailed(error.localizedDescription)
+        }
+    }
+    
+    /// Sends a password reset email to the specified email address.
+    ///
+    /// The email contains a link that, when clicked, will open the app
+    /// and allow the user to set a new password.
+    ///
+    /// - Parameter email: The email address to send the reset link to
+    /// - Throws: An error if the email fails to send
+    func sendPasswordResetEmail(to email: String) async throws {
+        do {
+            // The redirectTo URL should match your app's URL scheme
+            // Supabase will append tokens to this URL
+            try await supabase.auth.resetPasswordForEmail(
+                email,
+                redirectTo: URL(string: "bookvocab://reset-password")
+            )
+            
+            // Track password reset request
+            AnalyticsService.shared.track(.login, properties: [
+                "action": "password_reset_requested"
+            ])
+            
+        } catch let error as AuthError {
+            throw PasswordError.resetEmailFailed(mapAuthError(error))
+        } catch {
+            throw PasswordError.resetEmailFailed(error.localizedDescription)
+        }
+    }
+    
+    /// Updates the user's password after clicking a reset link from email.
+    ///
+    /// This method should be called after the user opens the app via
+    /// the password reset deep link. The Supabase SDK handles the token
+    /// from the deep link automatically.
+    ///
+    /// - Parameter newPassword: The new password to set
+    /// - Throws: An error if the password update fails
+    func updatePassword(newPassword: String) async throws {
+        do {
+            try await supabase.auth.update(user: UserAttributes(password: newPassword))
+            
+            // Track password reset completion
+            AnalyticsService.shared.track(.login, properties: [
+                "action": "password_reset_completed"
+            ])
+            
+            // Sign out after password reset to ensure clean state
+            // User will need to log in with new password
+            try? await supabase.auth.signOut()
+            currentUser = nil
+            isAuthenticated = false
+            
+        } catch let error as AuthError {
+            throw PasswordError.updateFailed(mapAuthError(error))
+        } catch {
+            throw PasswordError.updateFailed(error.localizedDescription)
+        }
+    }
+    
+    /// Handles the password reset deep link.
+    ///
+    /// This should be called when the app is opened via a password reset URL.
+    /// It extracts the tokens from the URL and establishes a session.
+    ///
+    /// - Parameter url: The deep link URL containing reset tokens
+    /// - Returns: True if the URL was a valid password reset link
+    func handlePasswordResetURL(_ url: URL) async -> Bool {
+        // Check if this is a password reset URL
+        guard url.scheme == "bookvocab",
+              url.host == "reset-password" else {
+            return false
+        }
+        
+        do {
+            // The Supabase SDK can handle the URL and establish a session
+            // with the tokens from the reset email
+            _ = try await supabase.auth.session(from: url)
+            return true
+        } catch {
+            errorMessage = "Invalid or expired reset link. Please request a new one."
+            return false
+        }
+    }
+    
     // MARK: - Error Handling
     
     /// Clears the current error message.
@@ -259,6 +386,35 @@ class UserSessionViewModel: ObservableObject {
             // For other errors, use the localized description
             // These are generally already user-friendly from Supabase
             return error.localizedDescription
+        }
+    }
+}
+
+// MARK: - Password Errors
+
+/// Errors that can occur during password management operations.
+enum PasswordError: LocalizedError {
+    case noUserEmail
+    case incorrectCurrentPassword
+    case updateFailed(String)
+    case resetEmailFailed(String)
+    case weakPassword
+    case linkExpired
+    
+    var errorDescription: String? {
+        switch self {
+        case .noUserEmail:
+            return "Unable to retrieve your email address. Please sign in again."
+        case .incorrectCurrentPassword:
+            return "The current password you entered is incorrect."
+        case .updateFailed(let message):
+            return "Failed to update password: \(message)"
+        case .resetEmailFailed(let message):
+            return "Failed to send reset email: \(message)"
+        case .weakPassword:
+            return "Password is too weak. Please use at least 6 characters."
+        case .linkExpired:
+            return "This password reset link has expired. Please request a new one."
         }
     }
 }

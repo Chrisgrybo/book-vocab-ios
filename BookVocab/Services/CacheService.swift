@@ -273,6 +273,33 @@ class CacheService: ObservableObject {
         }
     }
     
+    /// Updates an existing vocab word in the cache.
+    /// - Parameter word: The updated vocab word.
+    func updateVocabWord(_ word: VocabWord) {
+        logger.debug("💾 Updating vocab word in cache: '\(word.word)'")
+        
+        let request = NSFetchRequest<CachedVocabWord>(entityName: "CachedVocabWord")
+        request.predicate = NSPredicate(format: "id == %@", word.id as CVarArg)
+        
+        do {
+            if let cached = try viewContext.fetch(request).first {
+                cached.update(from: word)
+                cached.updatedAt = Date()
+                cached.needsSync = true
+                
+                persistence.save()
+                addToSyncQueue(entityType: "vocabWord", entityId: word.id, action: "update")
+                
+                logger.info("💾 Vocab word updated in cache: '\(word.word)'")
+            } else {
+                // Word not found in cache, save it as new
+                saveVocabWord(word, needsSync: true)
+            }
+        } catch {
+            logger.error("❌ Failed to update vocab word in cache: \(error.localizedDescription)")
+        }
+    }
+    
     /// Deletes a vocab word from the cache.
     /// - Parameters:
     ///   - wordId: The word's ID.

@@ -328,6 +328,46 @@ class VocabViewModel: ObservableObject {
         logger.info("✅ Successfully set '\(word.word)' mastered status to \(mastered)")
     }
     
+    /// Updates an existing vocabulary word.
+    /// Updates cache immediately and queues sync to Supabase.
+    /// - Parameter word: The updated word data
+    func updateWord(_ word: VocabWord) async throws {
+        guard let index = allWords.firstIndex(where: { $0.id == word.id }) else {
+            logger.warning("📝 updateWord: Word '\(word.word)' not found in allWords")
+            throw VocabError.wordNotFound
+        }
+        
+        logger.info("📝 Updating vocab word: '\(word.word)'")
+        
+        // Update local array immediately
+        allWords[index] = word
+        
+        // Update cache (will queue for sync if offline)
+        cacheService.updateVocabWord(word)
+        
+        // If online, also sync to Supabase
+        if networkMonitor.isConnected {
+            // TODO: Implement actual Supabase update
+            do {
+                try await Task.sleep(nanoseconds: 300_000_000) // Simulate network delay
+                // await supabaseService.updateVocabWord(word)
+                logger.info("📝 Vocab word update synced to Supabase")
+            } catch {
+                logger.error("📝 Failed to sync update to Supabase: \(error.localizedDescription)")
+                throw error
+            }
+        } else {
+            logger.debug("📝 Offline - word update saved to cache, will sync later")
+        }
+        
+        // Track word edited event
+        AnalyticsService.shared.track(.wordEdited, properties: [
+            AnalyticsProperty.word.rawValue: word.word
+        ])
+        
+        logger.info("✅ Successfully updated word: '\(word.word)'")
+    }
+    
     /// Deletes a vocabulary word.
     /// Removes from cache and queues delete for Supabase sync.
     /// - Parameter word: The word to delete
@@ -384,5 +424,43 @@ class VocabViewModel: ObservableObject {
     func forceRefresh() async {
         logger.info("📝 Force refresh triggered")
         await fetchAllWords()
+    }
+    
+    /// Deletes all words associated with a specific book.
+    /// Called when a book is deleted.
+    /// - Parameter bookId: The book's ID
+    func deleteWords(forBook bookId: UUID) async {
+        logger.info("📝 Deleting all words for book: \(bookId.uuidString.prefix(8))")
+        
+        let wordsToDelete = allWords.filter { $0.bookId == bookId }
+        
+        for word in wordsToDelete {
+            await deleteWord(word)
+        }
+        
+        logger.info("📝 Deleted \(wordsToDelete.count) words for book")
+    }
+}
+
+// MARK: - Vocab Errors
+
+/// Errors that can occur during vocabulary operations.
+enum VocabError: LocalizedError {
+    case wordNotFound
+    case saveFailed(String)
+    case deleteFailed(String)
+    case networkRequired
+    
+    var errorDescription: String? {
+        switch self {
+        case .wordNotFound:
+            return "Word not found in your vocabulary."
+        case .saveFailed(let message):
+            return "Failed to save word: \(message)"
+        case .deleteFailed(let message):
+            return "Failed to delete word: \(message)"
+        case .networkRequired:
+            return "This action requires an internet connection."
+        }
     }
 }

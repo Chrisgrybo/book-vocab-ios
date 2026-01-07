@@ -28,6 +28,9 @@ struct AllVocabView: View {
     @State private var sortOrder: SortOrder = .newest
     @State private var hasAppeared: Bool = false
     @State private var showingAddWord: Bool = false
+    @State private var selectedWordForEdit: VocabWord?
+    @State private var showDeleteError: Bool = false
+    @State private var deleteErrorMessage: String = ""
     
     enum WordFilter: String, CaseIterable {
         case all = "All"
@@ -77,27 +80,56 @@ struct AllVocabView: View {
     
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 0) {
-                    if vocabViewModel.allWords.isEmpty {
+            Group {
+                if vocabViewModel.allWords.isEmpty {
+                    ScrollView {
                         emptyStateView
                             .padding(.top, AppSpacing.xxxl)
-                    } else {
-                        // Stats header
-                        statsHeader
-                            .padding(.horizontal, AppSpacing.horizontalPadding)
-                            .padding(.top, AppSpacing.md)
-                        
-                        // Filters
-                        filterSection
-                            .padding(.top, AppSpacing.lg)
-                        
-                        // Words list
-                        wordsSection
-                            .padding(.top, AppSpacing.md)
                     }
+                } else {
+                    List {
+                        // Stats header section
+                        Section {
+                            statsHeader
+                        }
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        
+                        // Filters section
+                        Section {
+                            filterSection
+                        }
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        
+                        // Words section with swipe actions
+                        Section {
+                            wordsListContent
+                        } header: {
+                            HStack {
+                                Text("Words")
+                                    .font(.title3)
+                                    .fontWeight(.bold)
+                                    .foregroundStyle(.primary)
+                                
+                                Spacer()
+                                
+                                Text("\(displayedWords.count) words")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .textCase(nil)
+                            .padding(.vertical, AppSpacing.sm)
+                        }
+                        .listRowInsets(EdgeInsets(top: 4, leading: AppSpacing.horizontalPadding, bottom: 4, trailing: AppSpacing.horizontalPadding))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                    }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
                 }
-                .padding(.bottom, AppSpacing.xxxl)
             }
             .background(AppColors.groupedBackground)
             .navigationTitle("All Words")
@@ -120,6 +152,15 @@ struct AllVocabView: View {
             }
             .sheet(isPresented: $showingAddWord) {
                 AddVocabView()
+            }
+            .sheet(item: $selectedWordForEdit) { word in
+                EditWordView(word: word)
+                    .environmentObject(vocabViewModel)
+            }
+            .alert("Delete Failed", isPresented: $showDeleteError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(deleteErrorMessage)
             }
             .refreshable {
                 await vocabViewModel.fetchAllWords()
@@ -236,54 +277,65 @@ struct AllVocabView: View {
         }
     }
     
-    // MARK: - Words Section
+    // MARK: - Words List Content (with swipe actions)
     
-    private var wordsSection: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            // Header
-            HStack {
-                Text("Words")
-                    .font(.title3)
-                    .fontWeight(.bold)
-                
-                Spacer()
-                
-                Text("\(displayedWords.count) words")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, AppSpacing.horizontalPadding)
-            
-            // Words with interleaved ads
-            if displayedWords.isEmpty {
-                noResultsView
-            } else {
-                LazyVStack(spacing: AppSpacing.sm) {
-                    ForEach(Array(displayedWords.enumerated()), id: \.element.id) { index, word in
-                        // Word card
-                        AllWordsCardView(
-                            word: word,
-                            bookTitle: bookTitle(for: word)
-                        )
-                        .opacity(hasAppeared ? 1 : 0)
-                        .offset(y: hasAppeared ? 0 : 20)
-                        .animation(
-                            AppAnimation.spring.delay(Double(index) * 0.02),
-                            value: hasAppeared
-                        )
-                        
-                        // Insert MREC ad every 5 words
-                        ConditionalAdView(
-                            index: index,
-                            interval: 5,
-                            minimumItems: 5,
-                            totalItems: displayedWords.count
-                        )
+    @ViewBuilder
+    private var wordsListContent: some View {
+        if displayedWords.isEmpty {
+            noResultsView
+        } else {
+            ForEach(Array(displayedWords.enumerated()), id: \.element.id) { index, word in
+                // Word card with swipe actions
+                AllWordsCardView(
+                    word: word,
+                    bookTitle: bookTitle(for: word),
+                    onEdit: {
+                        selectedWordForEdit = word
                     }
+                )
+                .opacity(hasAppeared ? 1 : 0)
+                .offset(y: hasAppeared ? 0 : 20)
+                .animation(
+                    AppAnimation.spring.delay(Double(index) * 0.02),
+                    value: hasAppeared
+                )
+                // Swipe LEFT to reveal Edit and Delete
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    // Delete button (red)
+                    Button(role: .destructive) {
+                        Task {
+                            await deleteWord(word)
+                        }
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                    
+                    // Edit button (blue)
+                    Button {
+                        selectedWordForEdit = word
+                    } label: {
+                        Label("Edit", systemImage: "pencil")
+                    }
+                    .tint(.blue)
                 }
-                .padding(.horizontal, AppSpacing.horizontalPadding)
+                
+                // Insert MREC ad every 5 words (as a separate row)
+                if shouldShowAd(at: index) {
+                    AdMRECView()
+                        .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                        .listRowBackground(Color.clear)
+                }
             }
         }
+    }
+    
+    /// Determines if an ad should be shown after the given index.
+    private func shouldShowAd(at index: Int) -> Bool {
+        @AppStorage("isPremium") var isPremium: Bool = false
+        guard !isPremium else { return false }
+        guard displayedWords.count >= 5 else { return false }
+        guard index < displayedWords.count - 1 else { return false }
+        return (index + 1) % 5 == 0
     }
     
     private var noResultsView: some View {
@@ -372,6 +424,21 @@ struct AllVocabView: View {
         }
         return booksViewModel.books.first { $0.id == bookId }?.title ?? "Unknown"
     }
+    
+    /// Deletes a word with animation and error handling.
+    private func deleteWord(_ word: VocabWord) async {
+        withAnimation(AppAnimation.spring) {
+            Task {
+                await vocabViewModel.deleteWord(word)
+            }
+        }
+        
+        // Check for errors
+        if let error = vocabViewModel.errorMessage {
+            deleteErrorMessage = error
+            showDeleteError = true
+        }
+    }
 }
 
 // MARK: - All Words Card View
@@ -379,6 +446,7 @@ struct AllVocabView: View {
 struct AllWordsCardView: View {
     let word: VocabWord
     let bookTitle: String
+    var onEdit: (() -> Void)? = nil
     
     @EnvironmentObject var vocabViewModel: VocabViewModel
     @State private var isExpanded: Bool = false
@@ -501,6 +569,7 @@ struct AllWordsCardView: View {
         .shadow(color: .black.opacity(0.04), radius: 8, x: 0, y: 2)
         .contentShape(Rectangle())
         .onTapGesture {
+            // Toggle expansion on tap
             withAnimation(AppAnimation.spring) {
                 isExpanded.toggle()
             }

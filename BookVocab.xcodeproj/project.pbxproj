@@ -45,6 +45,11 @@
 		VW010 /* QuizView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC024 /* QuizView.swift */; };
 		VW011 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC029 /* Theme.swift */; };
 		VW012 /* AdMRECView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC031 /* AdMRECView.swift */; };
+		VW013 /* ChangePasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC032 /* ChangePasswordView.swift */; };
+		VW014 /* ForgotPasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC033 /* ForgotPasswordView.swift */; };
+		VW015 /* ResetPasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC034 /* ResetPasswordView.swift */; };
+		VW016 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC035 /* SettingsView.swift */; };
+		VW017 /* EditWordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC036 /* EditWordView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -84,6 +89,11 @@
 		SRC029 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		SRC030 /* AdManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdManager.swift; sourceTree = "<group>"; };
 		SRC031 /* AdMRECView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdMRECView.swift; sourceTree = "<group>"; };
+		SRC032 /* ChangePasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangePasswordView.swift; sourceTree = "<group>"; };
+		SRC033 /* ForgotPasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForgotPasswordView.swift; sourceTree = "<group>"; };
+		SRC034 /* ResetPasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResetPasswordView.swift; sourceTree = "<group>"; };
+		SRC035 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		SRC036 /* EditWordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditWordView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -156,6 +166,7 @@
 				GRP009 /* Home */,
 				GRP010 /* Vocab */,
 				GRP011 /* Study */,
+				GRP014 /* Settings */,
 				GRP013 /* Components */,
 			);
 			path = Views;
@@ -189,6 +200,9 @@
 			isa = PBXGroup;
 			children = (
 				SRC012 /* LoginView.swift */,
+				SRC032 /* ChangePasswordView.swift */,
+				SRC033 /* ForgotPasswordView.swift */,
+				SRC034 /* ResetPasswordView.swift */,
 			);
 			path = Auth;
 			sourceTree = "<group>";
@@ -208,6 +222,7 @@
 			children = (
 				SRC017 /* AddVocabView.swift */,
 				SRC018 /* AllVocabView.swift */,
+				SRC036 /* EditWordView.swift */,
 			);
 			path = Vocab;
 			sourceTree = "<group>";
@@ -238,6 +253,14 @@
 				SRC031 /* AdMRECView.swift */,
 			);
 			path = Components;
+			sourceTree = "<group>";
+		};
+		GRP014 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				SRC035 /* SettingsView.swift */,
+			);
+			path = Settings;
 			sourceTree = "<group>";
 		};
 		ROOT001 = {
@@ -354,6 +377,11 @@
 				VW011 /* Theme.swift in Sources */,
 				SVC008 /* AdManager.swift in Sources */,
 				VW012 /* AdMRECView.swift in Sources */,
+				VW013 /* ChangePasswordView.swift in Sources */,
+				VW014 /* ForgotPasswordView.swift in Sources */,
+				VW015 /* ResetPasswordView.swift in Sources */,
+				VW016 /* SettingsView.swift in Sources */,
+				VW017 /* EditWordView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

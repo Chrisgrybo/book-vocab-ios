@@ -31,6 +31,9 @@ struct BookDetailView: View {
     @State private var searchText: String = ""
     @State private var showMasteredOnly: Bool = false
     @State private var hasAppeared: Bool = false
+    @State private var selectedWordForEdit: VocabWord?
+    @State private var showDeleteError: Bool = false
+    @State private var deleteErrorMessage: String = ""
     
     // MARK: - Computed Properties
     
@@ -65,21 +68,58 @@ struct BookDetailView: View {
     // MARK: - Body
     
     var body: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                // Hero header
+        List {
+            // Hero header section
+            Section {
                 heroHeader
-                
-                // Stats cards
-                statsSection
-                    .padding(.top, -40)
-                    .padding(.horizontal, AppSpacing.horizontalPadding)
-                
-                // Words section
-                wordsSection
-                    .padding(.top, AppSpacing.lg)
             }
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            
+            // Stats section
+            Section {
+                statsSection
+            }
+            .listRowInsets(EdgeInsets(top: -40, leading: AppSpacing.horizontalPadding, bottom: 0, trailing: AppSpacing.horizontalPadding))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            
+            // Filter pills
+            if !bookWords.isEmpty {
+                Section {
+                    filterPills
+                }
+                .listRowInsets(EdgeInsets(top: AppSpacing.md, leading: AppSpacing.horizontalPadding, bottom: 0, trailing: AppSpacing.horizontalPadding))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+            }
+            
+            // Words section with swipe actions
+            Section {
+                wordsListContent
+            } header: {
+                HStack {
+                    Text("Vocabulary")
+                        .font(.title3)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.primary)
+                    
+                    Spacer()
+                    
+                    Text("\(filteredWords.count) words")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .textCase(nil)
+                .padding(.vertical, AppSpacing.sm)
+            }
+            .listRowInsets(EdgeInsets(top: 4, leading: AppSpacing.horizontalPadding, bottom: 4, trailing: AppSpacing.horizontalPadding))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
         .background(AppColors.groupedBackground)
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchText, prompt: "Search words...")
@@ -94,6 +134,15 @@ struct BookDetailView: View {
         }
         .sheet(isPresented: $showingAddVocab) {
             AddVocabView(bookId: book.id)
+        }
+        .sheet(item: $selectedWordForEdit) { word in
+            EditWordView(word: word)
+                .environmentObject(vocabViewModel)
+        }
+        .alert("Delete Failed", isPresented: $showDeleteError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(deleteErrorMessage)
         }
         .onAppear {
             withAnimation(AppAnimation.spring.delay(0.1)) {
@@ -232,67 +281,70 @@ struct BookDetailView: View {
         .offset(y: hasAppeared ? 0 : 20)
     }
     
-    // MARK: - Words Section
+    // MARK: - Words List Content (with swipe actions)
     
     /// Premium status for ad display
     @AppStorage("isPremium") private var isPremium: Bool = false
     
-    private var wordsSection: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.md) {
-            // Header
-            HStack {
-                Text("Vocabulary")
-                    .font(.title3)
-                    .fontWeight(.bold)
-                
-                Spacer()
-                
-                Text("\(filteredWords.count) words")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, AppSpacing.horizontalPadding)
-            
-            // Filter pills
-            if !bookWords.isEmpty {
-                filterPills
-                    .padding(.horizontal, AppSpacing.horizontalPadding)
+    @ViewBuilder
+    private var wordsListContent: some View {
+        if filteredWords.isEmpty {
+            emptyWordsState
+        } else {
+            // Top MREC ad (only if not premium and has words)
+            if !isPremium {
+                AdMRECView()
+                    .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                    .listRowBackground(Color.clear)
             }
             
-            // Words list with ads
-            if filteredWords.isEmpty {
-                emptyWordsState
-                    .padding(.top, AppSpacing.xl)
-            } else {
-                LazyVStack(spacing: AppSpacing.sm) {
-                    // Top MREC ad (only if not premium and has words)
-                    if !isPremium && !filteredWords.isEmpty {
-                        AdMRECView()
+            ForEach(Array(filteredWords.enumerated()), id: \.element.id) { index, word in
+                // Word card with swipe actions
+                WordCardView(word: word, onEdit: {
+                    selectedWordForEdit = word
+                })
+                .opacity(hasAppeared ? 1 : 0)
+                .offset(y: hasAppeared ? 0 : 20)
+                .animation(
+                    AppAnimation.spring.delay(Double(index) * 0.03),
+                    value: hasAppeared
+                )
+                // Swipe LEFT to reveal Edit and Delete
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    // Delete button (red)
+                    Button(role: .destructive) {
+                        Task {
+                            await deleteWord(word)
+                        }
+                    } label: {
+                        Label("Delete", systemImage: "trash")
                     }
                     
-                    ForEach(Array(filteredWords.enumerated()), id: \.element.id) { index, word in
-                        // Word card
-                        WordCardView(word: word)
-                            .opacity(hasAppeared ? 1 : 0)
-                            .offset(y: hasAppeared ? 0 : 20)
-                            .animation(
-                                AppAnimation.spring.delay(Double(index) * 0.03),
-                                value: hasAppeared
-                            )
-                        
-                        // Insert MREC ad every 5 words
-                        ConditionalAdView(
-                            index: index,
-                            interval: 5,
-                            minimumItems: 5,
-                            totalItems: filteredWords.count
-                        )
+                    // Edit button (blue)
+                    Button {
+                        selectedWordForEdit = word
+                    } label: {
+                        Label("Edit", systemImage: "pencil")
                     }
+                    .tint(.blue)
                 }
-                .padding(.horizontal, AppSpacing.horizontalPadding)
+                
+                // Insert MREC ad every 5 words
+                if shouldShowAdInBookDetail(at: index) {
+                    AdMRECView()
+                        .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                        .listRowBackground(Color.clear)
+                }
             }
         }
-        .padding(.bottom, AppSpacing.xxxl)
+    }
+    
+    /// Determines if an ad should be shown after the given index.
+    private func shouldShowAdInBookDetail(at index: Int) -> Bool {
+        guard !isPremium else { return false }
+        guard filteredWords.count >= 5 else { return false }
+        guard index < filteredWords.count - 1 else { return false }
+        return (index + 1) % 5 == 0
     }
     
     private var filterPills: some View {
@@ -372,6 +424,23 @@ struct BookDetailView: View {
             Image(systemName: "line.3.horizontal.decrease.circle")
         }
     }
+    
+    // MARK: - Actions
+    
+    /// Deletes a word with animation and error handling.
+    private func deleteWord(_ word: VocabWord) async {
+        withAnimation(AppAnimation.spring) {
+            Task {
+                await vocabViewModel.deleteWord(word)
+            }
+        }
+        
+        // Check for errors
+        if let error = vocabViewModel.errorMessage {
+            deleteErrorMessage = error
+            showDeleteError = true
+        }
+    }
 }
 
 // MARK: - Stat Row
@@ -443,6 +512,7 @@ struct FilterChip: View {
 
 struct WordCardView: View {
     let word: VocabWord
+    var onEdit: (() -> Void)? = nil
     
     @EnvironmentObject var vocabViewModel: VocabViewModel
     @State private var isExpanded: Bool = false
@@ -554,6 +624,7 @@ struct WordCardView: View {
         .shadow(color: .black.opacity(0.04), radius: 8, x: 0, y: 2)
         .contentShape(Rectangle())
         .onTapGesture {
+            // Toggle expansion on tap
             withAnimation(AppAnimation.spring) {
                 isExpanded.toggle()
             }

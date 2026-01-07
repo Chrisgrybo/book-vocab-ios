@@ -219,7 +219,7 @@ struct AddBookView: View {
                 .padding(.horizontal, AppSpacing.horizontalPadding)
             
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: AppSpacing.md) {
+                HStack(spacing: AppSpacing.sm) {
                     ForEach(searchResults) { result in
                         SearchResultCard(
                             result: result,
@@ -230,6 +230,7 @@ struct AddBookView: View {
                     }
                 }
                 .padding(.horizontal, AppSpacing.horizontalPadding)
+                .padding(.vertical, 4) // Prevent highlight/shadow clipping
             }
         }
     }
@@ -485,30 +486,19 @@ struct SearchResultCard: View {
     let isSelected: Bool
     let onTap: () -> Void
     
+    /// Fixed dimensions for consistent card sizes
+    private let coverWidth: CGFloat = 100
+    private let coverHeight: CGFloat = 145
+    
+    /// Highlight border width
+    private let highlightWidth: CGFloat = 2.5
+    
     var body: some View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                // Cover
-                Group {
-                    if let coverUrl = result.coverImageUrl, let url = URL(string: coverUrl) {
-                        AsyncImage(url: url) { image in
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        } placeholder: {
-                            placeholderCover
-                        }
-                    } else {
-                        placeholderCover
-                    }
-                }
-                .frame(width: 100, height: 140)
-                .clipShape(RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
-                        .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 3)
-                )
-                .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
+                // Cover container with padding for highlight visibility
+                coverView
+                    .padding(4) // Space for highlight border to render without clipping
                 
                 // Info
                 VStack(alignment: .leading, spacing: 2) {
@@ -517,13 +507,15 @@ struct SearchResultCard: View {
                         .fontWeight(.medium)
                         .foregroundStyle(.primary)
                         .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                     
                     Text(result.author)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
-                .frame(width: 100, alignment: .leading)
+                .frame(width: coverWidth, alignment: .leading)
+                .padding(.horizontal, 4) // Match horizontal padding of cover
             }
         }
         .buttonStyle(.plain)
@@ -531,16 +523,87 @@ struct SearchResultCard: View {
         .animation(AppAnimation.spring, value: isSelected)
     }
     
+    /// The book cover with background, image, and selection highlight
+    private var coverView: some View {
+        ZStack {
+            // Background fills entire frame
+            RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                .fill(AppColors.tanDark.opacity(0.3))
+            
+            // Book cover image - contained within the background
+            coverImage
+        }
+        .frame(width: coverWidth, height: coverHeight)
+        // Apply corner radius via background, not clipShape
+        .background(
+            RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                .fill(Color.clear)
+        )
+        // Clip the image content to rounded corners
+        .contentShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+        // Selection highlight - renders OUTSIDE the clip
+        .overlay(
+            RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                .strokeBorder(
+                    isSelected ? Color.blue.opacity(0.85) : Color.clear,
+                    lineWidth: highlightWidth
+                )
+        )
+        // Subtle shadow
+        .shadow(
+            color: isSelected ? Color.blue.opacity(0.25) : .black.opacity(0.1),
+            radius: isSelected ? 6 : 3,
+            x: 0,
+            y: isSelected ? 3 : 2
+        )
+    }
+    
+    /// Async image loading with proper phase handling
+    @ViewBuilder
+    private var coverImage: some View {
+        if let coverUrl = result.coverImageUrl, let url = URL(string: coverUrl) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                case .failure:
+                    placeholderCover
+                case .empty:
+                    placeholderCover
+                        .overlay {
+                            ProgressView()
+                                .tint(AppColors.primary.opacity(0.5))
+                        }
+                @unknown default:
+                    placeholderCover
+                }
+            }
+        } else {
+            placeholderCover
+        }
+    }
+    
     private var placeholderCover: some View {
         ZStack {
             LinearGradient(
-                colors: [Color.gray.opacity(0.3), Color.gray.opacity(0.2)],
+                colors: [AppColors.tanDark, AppColors.tan],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
             
-            Image(systemName: "book.closed.fill")
-                .foregroundStyle(.gray.opacity(0.5))
+            VStack(spacing: 4) {
+                Image(systemName: "book.closed.fill")
+                    .font(.title2)
+                    .foregroundStyle(AppColors.primary.opacity(0.4))
+                
+                Text(result.title.prefix(10))
+                    .font(.system(size: 8, weight: .medium))
+                    .foregroundStyle(AppColors.primary.opacity(0.3))
+                    .lineLimit(1)
+            }
         }
     }
 }

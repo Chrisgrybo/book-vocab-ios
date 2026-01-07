@@ -24,6 +24,7 @@ import GoogleMobileAds
 /// - Creates and owns the shared ViewModels as @StateObject
 /// - Initializes offline caching services
 /// - Initializes AdMob SDK for monetization
+/// - Handles deep links for password reset
 /// - Determines which view to show based on authentication state
 /// - Injects ViewModels into the environment for child views
 @main
@@ -35,6 +36,9 @@ struct BookVocabApp: App {
     /// This is the source of truth for whether the user is logged in.
     /// Created as @StateObject to survive view updates.
     @StateObject private var session = UserSessionViewModel()
+    
+    /// Whether a password reset deep link was detected
+    @State private var showPasswordReset: Bool = false
     
     /// Shared books view model for managing the user's book collection.
     @StateObject private var booksViewModel = BooksViewModel()
@@ -91,6 +95,20 @@ struct BookVocabApp: App {
                                 
                                 // Identify user for analytics
                                 AnalyticsService.shared.identify(userId: userId.uuidString)
+                                
+                                // Fetch data on app launch to ensure consistency
+                                Task {
+                                    await loadUserData()
+                                }
+                            }
+                        }
+                        .onChange(of: session.currentUser?.id) { _, newUserId in
+                            // Handle user change (e.g., after re-login)
+                            if let userId = newUserId {
+                                booksViewModel.setUserId(userId)
+                                Task {
+                                    await loadUserData()
+                                }
                             }
                         }
                 } else {
@@ -124,6 +142,50 @@ struct BookVocabApp: App {
                 }
             }
             .animation(.easeInOut, value: networkMonitor.isConnected)
+            // Handle deep links for password reset
+            .onOpenURL { url in
+                handleDeepLink(url)
+            }
+            // Show password reset sheet when deep link detected
+            .sheet(isPresented: $showPasswordReset) {
+                ResetPasswordView(onSuccess: {
+                    // After successful password reset, user needs to log in again
+                    showPasswordReset = false
+                })
+                .environmentObject(session)
+            }
+        }
+    }
+    
+    // MARK: - Data Loading
+    
+    /// Loads user data (books and vocab words) on app launch.
+    /// Ensures data is fetched from cache first, then synced with backend.
+    private func loadUserData() async {
+        // Fetch books and vocab words in parallel
+        async let booksTask: () = booksViewModel.fetchBooks()
+        async let vocabTask: () = vocabViewModel.fetchAllWords()
+        
+        // Wait for both to complete
+        await booksTask
+        await vocabTask
+    }
+    
+    // MARK: - Deep Link Handling
+    
+    /// Handles incoming deep links for password reset.
+    /// - Parameter url: The URL the app was opened with
+    private func handleDeepLink(_ url: URL) {
+        Task {
+            // Check if this is a password reset deep link
+            let isPasswordReset = await session.handlePasswordResetURL(url)
+            
+            if isPasswordReset {
+                // Show the password reset view
+                await MainActor.run {
+                    showPasswordReset = true
+                }
+            }
         }
     }
 }

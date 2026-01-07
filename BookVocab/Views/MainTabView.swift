@@ -25,16 +25,20 @@ struct MainTabView: View {
     
     @State private var selectedTab: Tab = .books
     
+    @EnvironmentObject var networkMonitor: NetworkMonitor
+    
     enum Tab: Int, CaseIterable {
         case books = 0
         case words = 1
         case study = 2
+        case profile = 3
         
         var title: String {
             switch self {
             case .books: return "Library"
             case .words: return "Words"
             case .study: return "Study"
+            case .profile: return "Profile"
             }
         }
         
@@ -43,6 +47,7 @@ struct MainTabView: View {
             case .books: return "books.vertical.fill"
             case .words: return "textformat.abc"
             case .study: return "brain.head.profile"
+            case .profile: return "person.crop.circle.fill"
             }
         }
     }
@@ -71,6 +76,14 @@ struct MainTabView: View {
                     Label(Tab.study.title, systemImage: Tab.study.icon)
                 }
                 .tag(Tab.study)
+            
+            // Profile tab
+            SettingsView()
+                .environmentObject(networkMonitor)
+                .tabItem {
+                    Label(Tab.profile.title, systemImage: Tab.profile.icon)
+                }
+                .tag(Tab.profile)
         }
         .tint(AppColors.primary)
         .onAppear {
@@ -116,4 +129,5 @@ struct MainTabView: View {
         .environmentObject(UserSessionViewModel())
         .environmentObject(BooksViewModel())
         .environmentObject(VocabViewModel())
+        .environmentObject(NetworkMonitor.shared)
 }
