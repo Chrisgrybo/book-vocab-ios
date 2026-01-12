@@ -2,7 +2,7 @@
 //  BookVocabApp.swift
 //  BookVocab
 //
-//  Main entry point for the Read & Remember iOS application.
+//  Main entry point for the Read & Recall iOS application.
 //  This app helps users track vocabulary words from books they read.
 //
 //  Architecture:
@@ -18,7 +18,7 @@
 import SwiftUI
 import GoogleMobileAds
 
-/// The main application struct that serves as the entry point for Read & Remember.
+/// The main application struct that serves as the entry point for Read & Recall.
 ///
 /// This struct:
 /// - Creates and owns the shared ViewModels as @StateObject

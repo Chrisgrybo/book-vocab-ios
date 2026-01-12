@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDisplayName</key>
-	<string>Read &amp; Remember</string>
+	<string>Read &amp; Recall</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

@@ -512,7 +512,7 @@ struct SettingsView: View {
     
     private var appVersion: some View {
         VStack(spacing: AppSpacing.xxs) {
-            Text("Read & Remember")
+            Text("Read & Recall")
                 .font(.caption)
                 .fontWeight(.medium)
                 .foregroundStyle(.secondary)

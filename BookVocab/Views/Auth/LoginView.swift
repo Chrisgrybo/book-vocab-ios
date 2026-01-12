@@ -176,7 +176,7 @@ struct LoginView: View {
             .opacity(hasAppeared ? 1 : 0)
             
             // App name
-            Text("Read & Remember")
+            Text("Read & Recall")
                 .font(.system(size: 28, weight: .bold, design: .serif))
                 .foregroundStyle(AppColors.primary)
             

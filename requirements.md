@@ -1,4 +1,4 @@
-"You are building an iOS SwiftUI app called 'Read & Remember'.
+"You are building an iOS SwiftUI app called 'Read & Recall'.
 
 Requirements
 

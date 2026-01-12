@@ -1,10 +1,10 @@
-# Read & Remember - iOS App
+# Read & Recall - iOS App
 
 A SwiftUI iOS application for tracking vocabulary words from books you read. **Now with full offline support!**
 
 ## Overview
 
-Read & Remember helps users build their vocabulary by collecting and organizing words from their reading. Users can add books to their collection, save vocabulary words with definitions, synonyms, antonyms, and example sentences, then study them through flashcards and quizzes — all with full offline support.
+Read & Recall helps users build their vocabulary by collecting and organizing words from their reading. Users can add books to their collection, save vocabulary words with definitions, synonyms, antonyms, and example sentences, then study them through flashcards and quizzes — all with full offline support.
 
 ## 🚀 Quick Start Guide
 
@@ -63,7 +63,7 @@ Read & Remember helps users build their vocabulary by collecting and organizing 
 
 ## 📴 Offline Functionality
 
-**Read & Remember works fully offline!**
+**Read & Recall works fully offline!**
 
 - **Books & Vocab**: All added books and vocabulary words are cached locally using Core Data
 - **Study Sessions**: Flashcards and quizzes work without an internet connection
@@ -226,7 +226,7 @@ BookVocab/
 
 ## 👑 Freemium Model
 
-Read & Remember uses a freemium business model with a monthly subscription for premium features.
+Read & Recall uses a freemium business model with a monthly subscription for premium features.
 
 ### Free Tier
 
@@ -303,7 +303,7 @@ Freemium events tracked via Mixpanel:
 
 ## 📺 AdMob Integration
 
-Read & Remember uses Google AdMob for monetization with a premium ad-removal option.
+Read & Recall uses Google AdMob for monetization with a premium ad-removal option.
 
 ### Ad Placements
 
@@ -387,12 +387,12 @@ static let interstitialAdUnitID = "ca-app-pub-XXXXXXXXXXXXXXXX/ZZZZZZZZZZ"
 
 ## 📊 Mixpanel Analytics Integration
 
-Read & Remember uses Mixpanel for comprehensive analytics tracking with offline support.
+Read & Recall uses Mixpanel for comprehensive analytics tracking with offline support.
 
 ### Setup
 
 1. Create a Mixpanel account at [mixpanel.com](https://mixpanel.com) (free tier available)
-2. Create a new project for Read & Remember
+2. Create a new project for Read & Recall
 3. Copy your Project Token from Settings > Project Settings
 4. Add to your `Secrets.swift`:
 
