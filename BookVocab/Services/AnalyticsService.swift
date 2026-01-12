@@ -76,8 +76,16 @@ enum AnalyticsEvent: String {
     case subscriptionCancelled = "Subscription Cancelled"
     case adsRemoved = "Ads Removed"
     case studyModePremiumUnlock = "Study Mode Premium Unlock"
+    case purchaseAttempted = "Purchase Attempted"
     case purchaseFailed = "Purchase Failed"
     case purchaseRestored = "Purchase Restored"
+    case restorePurchasesAttempted = "Restore Purchases Attempted"
+    case restorePurchasesSuccess = "Restore Purchases Success"
+    case restorePurchasesFailed = "Restore Purchases Failed"
+    case limitExceeded = "Limit Exceeded"
+    case limitReached = "Limit Reached"
+    case upgradeModalShown = "Upgrade Modal Shown"
+    case upgradeModalDismissed = "Upgrade Modal Dismissed"
     
     // MARK: - App Lifecycle Events
     case appOpened = "App Opened"

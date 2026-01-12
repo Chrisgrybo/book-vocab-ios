@@ -23,6 +23,7 @@ struct StudyView: View {
     
     @EnvironmentObject var vocabViewModel: VocabViewModel
     @EnvironmentObject var booksViewModel: BooksViewModel
+    @StateObject private var subscriptionManager = SubscriptionManager.shared
     
     // MARK: - State
     
@@ -33,6 +34,7 @@ struct StudyView: View {
     @State private var selectedSource: StudySource = .allWords
     @State private var learningOnly: Bool = true
     @State private var hasAppeared: Bool = false
+    @State private var showUpgradeModal: Bool = false
     
     // MARK: - Computed Properties
     
@@ -102,6 +104,10 @@ struct StudyView: View {
             }
             .fullScreenCover(isPresented: $showingFillInBlank) {
                 QuizSessionView(source: selectedSource, quizMode: .fillInBlank)
+            }
+            // Upgrade modal for premium study modes
+            .sheet(isPresented: $showUpgradeModal) {
+                UpgradeView(reason: .studyModeRestricted)
             }
         }
         .onAppear {
@@ -256,18 +262,29 @@ struct StudyView: View {
     
     private var studyModesSection: some View {
         VStack(alignment: .leading, spacing: AppSpacing.md) {
-            Text("Study Modes")
-                .font(.title3)
-                .fontWeight(.bold)
+            HStack {
+                Text("Study Modes")
+                    .font(.title3)
+                    .fontWeight(.bold)
+                
+                Spacer()
+                
+                if !subscriptionManager.isPremium {
+                    Text("Free: Flashcards only")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
             
-            // Flashcards
+            // Flashcards (always available)
             StudyModeCardView(
                 icon: "rectangle.on.rectangle.angled",
                 title: "Flashcards",
                 description: "Review words with flip cards",
                 gradient: AppColors.blueGradient,
                 wordCount: studyableWords.count,
-                isDisabled: !hasEnoughWords
+                isDisabled: !hasEnoughWords,
+                isPremiumLocked: false
             ) {
                 logger.info("📚 Launching flashcards")
                 showingFlashcards = true
@@ -276,33 +293,45 @@ struct StudyView: View {
             .offset(y: hasAppeared ? 0 : 20)
             .animation(AppAnimation.spring.delay(0.1), value: hasAppeared)
             
-            // Multiple Choice
+            // Multiple Choice (Premium only for free users)
             StudyModeCardView(
                 icon: "list.bullet.circle.fill",
                 title: "Multiple Choice",
                 description: "Choose the correct definition",
                 gradient: AppColors.purpleGradient,
                 wordCount: availableWords.count,
-                isDisabled: !hasEnoughForQuiz
+                isDisabled: !hasEnoughForQuiz,
+                isPremiumLocked: !subscriptionManager.isStudyModeAvailable(.multipleChoice)
             ) {
-                logger.info("📚 Launching multiple choice")
-                showingMultipleChoice = true
+                if subscriptionManager.isStudyModeAvailable(.multipleChoice) {
+                    logger.info("📚 Launching multiple choice")
+                    showingMultipleChoice = true
+                } else {
+                    subscriptionManager.promptUpgrade(reason: .studyModeRestricted)
+                    showUpgradeModal = true
+                }
             }
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 20)
             .animation(AppAnimation.spring.delay(0.15), value: hasAppeared)
             
-            // Fill in the Blank
+            // Fill in the Blank (Premium only for free users)
             StudyModeCardView(
                 icon: "pencil.circle.fill",
                 title: "Fill in the Blank",
                 description: "Type the word from its definition",
                 gradient: AppColors.orangeGradient,
                 wordCount: availableWords.count,
-                isDisabled: !hasEnoughForQuiz
+                isDisabled: !hasEnoughForQuiz,
+                isPremiumLocked: !subscriptionManager.isStudyModeAvailable(.fillInBlank)
             ) {
-                logger.info("📚 Launching fill-in-blank")
-                showingFillInBlank = true
+                if subscriptionManager.isStudyModeAvailable(.fillInBlank) {
+                    logger.info("📚 Launching fill-in-blank")
+                    showingFillInBlank = true
+                } else {
+                    subscriptionManager.promptUpgrade(reason: .studyModeRestricted)
+                    showUpgradeModal = true
+                }
             }
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 20)
@@ -469,18 +498,28 @@ struct StudyModeCardView: View {
     let gradient: LinearGradient
     let wordCount: Int
     let isDisabled: Bool
+    var isPremiumLocked: Bool = false
     let action: () -> Void
     
     @State private var isPressed: Bool = false
+    
+    /// Effective disabled state (either not enough words OR premium locked)
+    private var effectivelyDisabled: Bool {
+        isDisabled && !isPremiumLocked
+    }
     
     var body: some View {
         Button(action: action) {
             HStack(spacing: AppSpacing.md) {
                 // Icon
                 ZStack {
-                    if isDisabled {
+                    if effectivelyDisabled {
                         RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                             .fill(Color.gray.opacity(0.15))
+                            .frame(width: 52, height: 52)
+                    } else if isPremiumLocked {
+                        RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                            .fill(gradient.opacity(0.1))
                             .frame(width: 52, height: 52)
                     } else {
                         RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
@@ -488,42 +527,54 @@ struct StudyModeCardView: View {
                             .frame(width: 52, height: 52)
                     }
                     
-                    Image(systemName: icon)
+                    Image(systemName: isPremiumLocked ? "lock.fill" : icon)
                         .font(.title2)
-                        .foregroundStyle(isDisabled ? AnyShapeStyle(Color.gray) : AnyShapeStyle(gradient))
+                        .foregroundStyle(effectivelyDisabled ? AnyShapeStyle(Color.gray) : (isPremiumLocked ? AnyShapeStyle(Color.orange) : AnyShapeStyle(gradient)))
                 }
                 
                 // Text
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack {
+                    HStack(spacing: AppSpacing.xs) {
                         Text(title)
                             .font(.headline)
                             .fontWeight(.semibold)
-                            .foregroundStyle(isDisabled ? .secondary : .primary)
+                            .foregroundStyle(effectivelyDisabled ? .secondary : .primary)
                         
-                        if isDisabled && wordCount > 0 {
+                        if isPremiumLocked {
+                            PremiumBadge(small: true)
+                        } else if isDisabled && wordCount > 0 {
                             Text("(\(wordCount) words)")
                                 .font(.caption)
                                 .foregroundStyle(.tertiary)
                         }
                     }
                     
-                    Text(description)
+                    Text(isPremiumLocked ? "Upgrade to Premium to unlock" : description)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
                 
                 Spacer()
                 
-                Image(systemName: "chevron.right")
-                    .font(.subheadline)
-                    .foregroundStyle(.tertiary)
+                if isPremiumLocked {
+                    Image(systemName: "crown.fill")
+                        .font(.subheadline)
+                        .foregroundStyle(.orange)
+                } else {
+                    Image(systemName: "chevron.right")
+                        .font(.subheadline)
+                        .foregroundStyle(.tertiary)
+                }
             }
             .padding(AppSpacing.md)
             .cardStyle()
+            .overlay(
+                RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
+                    .stroke(isPremiumLocked ? Color.orange.opacity(0.3) : Color.clear, lineWidth: 1)
+            )
         }
         .buttonStyle(.plain)
-        .disabled(isDisabled)
+        .disabled(effectivelyDisabled)
         .scaleEffect(isPressed ? 0.98 : 1.0)
         .animation(AppAnimation.quick, value: isPressed)
         .onLongPressGesture(minimumDuration: .infinity, maximumDistance: .infinity) { } onPressingChanged: { pressing in

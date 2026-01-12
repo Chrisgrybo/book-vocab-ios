@@ -24,6 +24,7 @@ struct AddBookView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var session: UserSessionViewModel
     @EnvironmentObject var booksViewModel: BooksViewModel
+    @ObservedObject var subscriptionManager = SubscriptionManager.shared
     
     // MARK: - State
     
@@ -464,6 +465,14 @@ struct AddBookView: View {
     
     private func saveBook() {
         let userId = session.currentUser?.id ?? UUID()
+        
+        // Check freemium book limit
+        let currentBookCount = booksViewModel.books.count
+        if !subscriptionManager.canAddBook(currentCount: currentBookCount) {
+            logger.info("📖 Book limit reached, showing upgrade modal")
+            subscriptionManager.promptUpgrade(reason: .bookLimit)
+            return
+        }
         
         logger.info("📖 Saving book: '\(title)' by \(author)")
         

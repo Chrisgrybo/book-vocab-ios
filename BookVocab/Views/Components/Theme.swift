@@ -400,6 +400,101 @@ struct PillTag: View {
     }
 }
 
+// MARK: - Premium Badge
+
+/// A small badge indicating premium status.
+struct PremiumBadge: View {
+    var small: Bool = false
+    
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "crown.fill")
+                .font(small ? .caption2 : .caption)
+            if !small {
+                Text("Premium")
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+            }
+        }
+        .foregroundStyle(.orange)
+        .padding(.horizontal, small ? 6 : 8)
+        .padding(.vertical, small ? 3 : 4)
+        .background(
+            LinearGradient(
+                colors: [.yellow.opacity(0.2), .orange.opacity(0.2)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .clipShape(Capsule())
+    }
+}
+
+// MARK: - Limit Indicator
+
+/// A progress indicator showing current usage vs limit for free tier.
+struct LimitIndicator: View {
+    let current: Int
+    let max: Int
+    let label: String
+    var showBar: Bool = true
+    
+    private var progress: Double {
+        guard max > 0 else { return 0 }
+        return min(Double(current) / Double(max), 1.0)
+    }
+    
+    private var isAtLimit: Bool { current >= max }
+    private var barColor: Color { isAtLimit ? AppColors.warning : AppColors.primary }
+    
+    var body: some View {
+        VStack(spacing: AppSpacing.xs) {
+            HStack {
+                Label(label, systemImage: labelIcon)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                
+                Spacer()
+                
+                Text("\(current)/\(max)")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundStyle(isAtLimit ? AppColors.warning : .primary)
+            }
+            
+            if showBar {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        // Background
+                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                            .fill(Color.secondary.opacity(0.15))
+                            .frame(height: 6)
+                        
+                        // Progress
+                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                            .fill(barColor)
+                            .frame(width: geo.size.width * progress, height: 6)
+                    }
+                }
+                .frame(height: 6)
+            }
+        }
+        .padding(AppSpacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+                .fill(AppColors.cardBackground)
+        )
+    }
+    
+    private var labelIcon: String {
+        switch label.lowercased() {
+        case let l where l.contains("book"): return "books.vertical"
+        case let l where l.contains("word"): return "textformat.abc"
+        default: return "chart.bar"
+        }
+    }
+}
+
 // MARK: - Stat Display
 
 /// A reusable stat display component.

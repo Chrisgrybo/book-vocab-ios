@@ -134,6 +134,10 @@ BookVocab/
 │   │   ├── StudyView.swift      # Study hub with mode selection
 │   │   ├── FlashcardView.swift  # Flashcard study mode
 │   │   └── QuizView.swift       # Quiz modes (MC & fill-in)
+│   ├── Premium/
+│   │   └── UpgradeView.swift    # Premium upgrade modal
+│   ├── Settings/
+│   │   └── SettingsView.swift   # Profile & subscription management
 │   └── Components/
 │       ├── Theme.swift          # Design system (colors, spacing, styles)
 │       └── AdMRECView.swift     # MREC banner ad component
@@ -146,7 +150,8 @@ BookVocab/
     ├── NetworkMonitor.swift     # Connectivity detection
     ├── SyncService.swift        # Offline sync management
     ├── AdManager.swift          # AdMob ad management singleton
-    └── AnalyticsService.swift   # Mixpanel analytics wrapper
+    ├── AnalyticsService.swift   # Mixpanel analytics wrapper
+    └── SubscriptionManager.swift # StoreKit 2 subscription handling
 ```
 
 ## Features
@@ -195,7 +200,14 @@ BookVocab/
 - [x] **AdMob Integration**
   - MREC (300x250) banner ads in lists
   - Interstitial ads after study sessions
-  - Premium ad-removal option (`isPremium` flag)
+  - Premium ad-removal option
+
+- [x] **Freemium Model**
+  - Free tier: 6 books, 16 words/book, flashcards only
+  - Premium tier: Unlimited books/words, all study modes, no ads
+  - Monthly subscription ($1.99) via StoreKit 2
+  - Restore purchases functionality
+  - Limit enforcement with upgrade prompts
 
 - [x] **Mixpanel Analytics**
   - User authentication tracking (signup, login, logout)
@@ -209,9 +221,85 @@ BookVocab/
 
 - [ ] Push notifications for study reminders
 - [ ] Sign in with Apple
-- [ ] In-app purchases for premium upgrade
 - [ ] Spaced repetition algorithm
 - [ ] Export/import vocabulary lists
+
+## 👑 Freemium Model
+
+Book Vocab uses a freemium business model with a monthly subscription for premium features.
+
+### Free Tier
+
+| Feature | Limit |
+|---------|-------|
+| Books | Up to 6 |
+| Words per book | Up to 16 |
+| Study Modes | Flashcards only |
+| Ads | Enabled (MREC + Interstitial) |
+
+### Premium Tier ($1.99/month)
+
+| Feature | Access |
+|---------|--------|
+| Books | Unlimited |
+| Words per book | Unlimited |
+| Study Modes | All (Flashcards, Multiple Choice, Fill-in-the-Blank) |
+| Ads | Completely removed |
+
+### Limit Enforcement
+
+When a user reaches a free tier limit:
+1. A modal appears explaining the limit
+2. Premium benefits are highlighted
+3. User can upgrade or dismiss
+
+```swift
+// Check limits in your code
+if subscriptionManager.canAddBook(currentCount: bookCount) {
+    // Proceed with adding book
+} else {
+    subscriptionManager.promptUpgrade(reason: .bookLimit)
+}
+```
+
+### Subscription Management
+
+The `SubscriptionManager` singleton handles:
+- StoreKit 2 product loading
+- Purchase processing
+- Restore purchases
+- Subscription status tracking
+- Premium status persistence
+
+```swift
+// Access subscription status
+@StateObject var subscriptionManager = SubscriptionManager.shared
+
+// Check premium status
+if subscriptionManager.isPremium {
+    // Premium features available
+}
+
+// Restore purchases
+await subscriptionManager.restorePurchases()
+```
+
+### Analytics Events
+
+Freemium events tracked via Mixpanel:
+- `Limit Reached` - When user hits a free tier limit
+- `Upgrade Modal Shown` - When upgrade prompt appears
+- `Premium Purchased` - Successful subscription
+- `Purchase Failed` - Failed purchase attempt
+- `Purchase Restored` - Successful restore
+
+### In-App Purchase Product ID
+
+| Product | ID | Price |
+|---------|-----|-------|
+| Monthly Premium | `com.bookvocab.premium.monthly` | $1.99 |
+
+> ⚠️ **Testing**: Use sandbox testers in App Store Connect for testing purchases during development.
 
 ## 📺 AdMob Integration
 

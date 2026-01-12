@@ -21,6 +21,7 @@ struct SettingsView: View {
     
     @EnvironmentObject var session: UserSessionViewModel
     @EnvironmentObject var networkMonitor: NetworkMonitor
+    @StateObject private var subscriptionManager = SubscriptionManager.shared
     
     // MARK: - State
     
@@ -32,6 +33,9 @@ struct SettingsView: View {
     
     /// Controls animation on appear
     @State private var hasAppeared: Bool = false
+    
+    /// Shows the upgrade modal
+    @State private var showUpgradeModal: Bool = false
     
     // MARK: - Body
     
@@ -101,6 +105,18 @@ struct SettingsView: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("Are you sure you want to sign out?")
+            }
+            // Upgrade modal
+            .sheet(isPresented: $showUpgradeModal) {
+                UpgradeView(reason: .generic)
+            }
+            // Subscription error alert
+            .alert("Subscription Error", isPresented: .constant(subscriptionManager.errorMessage != nil)) {
+                Button("OK") {
+                    subscriptionManager.errorMessage = nil
+                }
+            } message: {
+                Text(subscriptionManager.errorMessage ?? "An error occurred")
             }
         }
     }
@@ -217,22 +233,188 @@ struct SettingsView: View {
     
     private var appSection: some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            sectionHeader("App")
+            sectionHeader("Subscription")
             
             VStack(spacing: 0) {
-                // Premium status (placeholder for future)
-                settingsRow(
-                    icon: "star.fill",
-                    iconColor: .orange,
-                    title: "Premium",
-                    subtitle: "Upgrade to remove ads"
-                ) {
-                    // TODO: Show premium upgrade sheet
+                // Premium status
+                if subscriptionManager.isPremium {
+                    // Premium user
+                    HStack(spacing: AppSpacing.md) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [.yellow.opacity(0.3), .orange.opacity(0.3)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 36, height: 36)
+                            
+                            Image(systemName: "crown.fill")
+                                .font(.subheadline)
+                                .foregroundStyle(.orange)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack {
+                                Text("Premium")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(AppColors.primary)
+                                
+                                PremiumBadge(small: true)
+                            }
+                            
+                            Text("All features unlocked • No ads")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        
+                        Spacer()
+                        
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    }
+                    .padding(AppSpacing.md)
+                } else {
+                    // Free user - show upgrade option
+                    Button {
+                        showUpgradeModal = true
+                    } label: {
+                        HStack(spacing: AppSpacing.md) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [.yellow.opacity(0.2), .orange.opacity(0.2)],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .frame(width: 36, height: 36)
+                                
+                                Image(systemName: "star.fill")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.orange)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Upgrade to Premium")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(AppColors.primary)
+                                
+                                Text("$1.99/month • Unlock all features")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                        .padding(AppSpacing.md)
+                    }
                 }
                 
                 Divider()
                     .padding(.leading, 52)
                 
+                // Restore purchases
+                Button {
+                    Task {
+                        await subscriptionManager.restorePurchases()
+                    }
+                } label: {
+                    HStack(spacing: AppSpacing.md) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+                                .fill(Color.blue.opacity(0.15))
+                                .frame(width: 36, height: 36)
+                            
+                            Image(systemName: "arrow.clockwise")
+                                .font(.subheadline)
+                                .foregroundStyle(.blue)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Restore Purchases")
+                                .font(.subheadline)
+                                .foregroundStyle(AppColors.primary)
+                            
+                            Text("Restore your Premium subscription")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        
+                        Spacer()
+                        
+                        if subscriptionManager.isProcessing {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                        } else {
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .padding(AppSpacing.md)
+                }
+                .disabled(subscriptionManager.isProcessing)
+                
+                Divider()
+                    .padding(.leading, 52)
+                
+                // Free tier limits (only show for free users)
+                if !subscriptionManager.isPremium {
+                    VStack(spacing: AppSpacing.sm) {
+                        HStack(spacing: AppSpacing.md) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+                                    .fill(Color.purple.opacity(0.15))
+                                    .frame(width: 36, height: 36)
+                                
+                                Image(systemName: "chart.bar.fill")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.purple)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Free Tier Limits")
+                                    .font(.subheadline)
+                                    .foregroundStyle(AppColors.primary)
+                                
+                                Text("Upgrade for unlimited access")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            
+                            Spacer()
+                        }
+                        
+                        VStack(spacing: AppSpacing.xs) {
+                            freeTierLimitRow(icon: "books.vertical", label: "Books", limit: "\(FreemiumLimits.maxBooks) max")
+                            freeTierLimitRow(icon: "textformat.abc", label: "Words per book", limit: "\(FreemiumLimits.maxWordsPerBook) max")
+                            freeTierLimitRow(icon: "brain.head.profile", label: "Study modes", limit: "Flashcards only")
+                        }
+                        .padding(.leading, 44)
+                    }
+                    .padding(AppSpacing.md)
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
+                    .fill(AppColors.cardBackground)
+            )
+            
+            // Network section
+            sectionHeader("Network")
+                .padding(.top, AppSpacing.md)
+            
+            VStack(spacing: 0) {
                 // Offline status
                 HStack(spacing: AppSpacing.md) {
                     ZStack {
@@ -263,6 +445,27 @@ struct SettingsView: View {
                 RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                     .fill(AppColors.cardBackground)
             )
+        }
+    }
+    
+    /// Helper view for free tier limit row
+    private func freeTierLimitRow(icon: String, label: String, limit: String) -> some View {
+        HStack {
+            Image(systemName: icon)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(width: 20)
+            
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            
+            Spacer()
+            
+            Text(limit)
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundStyle(.tertiary)
         }
     }
     

@@ -50,6 +50,8 @@
 		VW015 /* ResetPasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC034 /* ResetPasswordView.swift */; };
 		VW016 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC035 /* SettingsView.swift */; };
 		VW017 /* EditWordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC036 /* EditWordView.swift */; };
+		VW018 /* UpgradeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC037 /* UpgradeView.swift */; };
+		SVC009 /* SubscriptionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC038 /* SubscriptionManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -94,6 +96,8 @@
 		SRC034 /* ResetPasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResetPasswordView.swift; sourceTree = "<group>"; };
 		SRC035 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		SRC036 /* EditWordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditWordView.swift; sourceTree = "<group>"; };
+		SRC037 /* UpgradeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpgradeView.swift; sourceTree = "<group>"; };
+		SRC038 /* SubscriptionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -167,6 +171,7 @@
 				GRP010 /* Vocab */,
 				GRP011 /* Study */,
 				GRP014 /* Settings */,
+				GRP015 /* Premium */,
 				GRP013 /* Components */,
 			);
 			path = Views;
@@ -184,6 +189,7 @@
 				SRC027 /* CacheService.swift */,
 				SRC028 /* SyncService.swift */,
 				SRC030 /* AdManager.swift */,
+				SRC038 /* SubscriptionManager.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -261,6 +267,14 @@
 				SRC035 /* SettingsView.swift */,
 			);
 			path = Settings;
+			sourceTree = "<group>";
+		};
+		GRP015 /* Premium */ = {
+			isa = PBXGroup;
+			children = (
+				SRC037 /* UpgradeView.swift */,
+			);
+			path = Premium;
 			sourceTree = "<group>";
 		};
 		ROOT001 = {
@@ -382,6 +396,8 @@
 				VW015 /* ResetPasswordView.swift in Sources */,
 				VW016 /* SettingsView.swift in Sources */,
 				VW017 /* EditWordView.swift in Sources */,
+				VW018 /* UpgradeView.swift in Sources */,
+				SVC009 /* SubscriptionManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

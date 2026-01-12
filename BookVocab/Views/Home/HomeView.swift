@@ -32,6 +32,7 @@ struct HomeView: View {
     @EnvironmentObject var session: UserSessionViewModel
     @EnvironmentObject var booksViewModel: BooksViewModel
     @EnvironmentObject var vocabViewModel: VocabViewModel
+    @StateObject private var subscriptionManager = SubscriptionManager.shared
     
     // MARK: - State
     
@@ -42,6 +43,7 @@ struct HomeView: View {
     @State private var showDeleteConfirmation: Bool = false
     @State private var showDeleteError: Bool = false
     @State private var deleteErrorMessage: String = ""
+    @State private var showUpgradeModal: Bool = false
     
     // MARK: - Computed Properties
     
@@ -125,6 +127,10 @@ struct HomeView: View {
             .searchable(text: $searchText, prompt: "Search books...")
             .sheet(isPresented: $showingAddBook) {
                 AddBookView()
+            }
+            // Upgrade modal for free tier limits
+            .sheet(isPresented: $showUpgradeModal) {
+                UpgradeView(reason: subscriptionManager.upgradeReason)
             }
             // Delete confirmation dialog
             .confirmationDialog(
@@ -334,7 +340,13 @@ struct HomeView: View {
     
     private var addButton: some View {
         Button {
-            showingAddBook = true
+            // Check book limit for free users
+            if subscriptionManager.canAddBook(currentCount: booksViewModel.books.count) {
+                showingAddBook = true
+            } else {
+                subscriptionManager.promptUpgrade(reason: .bookLimit)
+                showUpgradeModal = true
+            }
         } label: {
             Image(systemName: "plus")
                 .font(.title3)
@@ -343,6 +355,22 @@ struct HomeView: View {
                 .frame(width: 32, height: 32)
                 .background(AppColors.primary)
                 .clipShape(Circle())
+        }
+    }
+    
+    // MARK: - Free Tier Limit Display
+    
+    private var bookLimitIndicator: some View {
+        Group {
+            if !subscriptionManager.isPremium {
+                LimitIndicator(
+                    current: booksViewModel.books.count,
+                    max: FreemiumLimits.maxBooks,
+                    label: "Books"
+                )
+                .padding(.horizontal, AppSpacing.horizontalPadding)
+                .padding(.top, AppSpacing.sm)
+            }
         }
     }
 }

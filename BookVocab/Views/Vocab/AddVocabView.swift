@@ -34,6 +34,7 @@ struct AddVocabView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var vocabViewModel: VocabViewModel
     @EnvironmentObject var booksViewModel: BooksViewModel
+    @StateObject private var subscriptionManager = SubscriptionManager.shared
     
     // MARK: - State
     
@@ -47,6 +48,7 @@ struct AddVocabView: View {
     @State private var hasLookedUp: Bool = false
     @State private var errorMessage: String?
     @State private var showingError: Bool = false
+    @State private var showUpgradeModal: Bool = false
     
     /// The selected book ID when using the book picker.
     /// Defaults to nil (global word / "All Words").
@@ -146,6 +148,10 @@ struct AddVocabView: View {
                 }
             } message: {
                 Text(errorMessage ?? "An unknown error occurred.")
+            }
+            // Upgrade modal for word limit
+            .sheet(isPresented: $showUpgradeModal) {
+                UpgradeView(reason: .wordLimit)
             }
         }
     }
@@ -506,6 +512,16 @@ struct AddVocabView: View {
     }
     
     private func saveWord() {
+        // Check word limit for free users (only if word is assigned to a book)
+        if let bookId = effectiveBookId {
+            let currentWordCount = vocabViewModel.fetchWords(forBook: bookId).count
+            if !subscriptionManager.canAddWord(currentCount: currentWordCount) {
+                subscriptionManager.promptUpgrade(reason: .wordLimit)
+                showUpgradeModal = true
+                return
+            }
+        }
+        
         let vocabWord = VocabWord(
             bookId: effectiveBookId,
             word: word.trimmingCharacters(in: .whitespacesAndNewlines).capitalized,
@@ -520,6 +536,12 @@ struct AddVocabView: View {
             await vocabViewModel.addWord(vocabWord)
             dismiss()
         }
+    }
+    
+    /// Current word count for the selected book (for limit display)
+    private var currentWordCountForBook: Int {
+        guard let bookId = effectiveBookId else { return 0 }
+        return vocabViewModel.fetchWords(forBook: bookId).count
     }
 }
 

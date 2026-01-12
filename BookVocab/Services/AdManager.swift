@@ -42,7 +42,10 @@ class AdManager: NSObject, ObservableObject {
     // MARK: - Published Properties
     
     /// Whether the user has premium (no ads)
-    @AppStorage("isPremium") var isPremium: Bool = false
+    /// This reads from SubscriptionManager for consistency
+    var isPremium: Bool {
+        SubscriptionManager.shared.isPremium
+    }
     
     /// Whether an interstitial ad is ready to show
     @Published var isInterstitialReady: Bool = false
