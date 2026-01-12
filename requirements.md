@@ -1,4 +1,4 @@
-“You are building an iOS SwiftUI app called ‘Book Vocab’.
+"You are building an iOS SwiftUI app called 'Read & Remember'.
 
 Requirements
 

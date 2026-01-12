@@ -176,8 +176,8 @@ struct LoginView: View {
             .opacity(hasAppeared ? 1 : 0)
             
             // App name
-            Text("Book Vocab")
-                .font(.system(size: 32, weight: .bold, design: .serif))
+            Text("Read & Remember")
+                .font(.system(size: 28, weight: .bold, design: .serif))
                 .foregroundStyle(AppColors.primary)
             
             // Context-aware subtitle

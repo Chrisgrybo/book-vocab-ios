@@ -512,7 +512,7 @@ struct SettingsView: View {
     
     private var appVersion: some View {
         VStack(spacing: AppSpacing.xxs) {
-            Text("Book Vocab")
+            Text("Read & Remember")
                 .font(.caption)
                 .fontWeight(.medium)
                 .foregroundStyle(.secondary)
