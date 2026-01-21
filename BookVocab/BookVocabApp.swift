@@ -91,10 +91,18 @@ struct BookVocabApp: App {
                         .onAppear {
                             // Set user ID for fetching user-specific data
                             if let userId = session.currentUser?.id {
-                                booksViewModel.setUserId(userId)
+                                setupViewModels(userId: userId)
                                 
                                 // Identify user for analytics
                                 AnalyticsService.shared.identify(userId: userId.uuidString)
+                                
+                                // Set user ID on subscription manager
+                                SubscriptionManager.shared.setUserId(userId)
+                                
+                                // Load premium status from backend if available
+                                if let settings = session.userSettings {
+                                    SubscriptionManager.shared.loadPremiumStatusFromBackend(settings)
+                                }
                                 
                                 // Fetch data on app launch to ensure consistency
                                 Task {
@@ -105,10 +113,19 @@ struct BookVocabApp: App {
                         .onChange(of: session.currentUser?.id) { _, newUserId in
                             // Handle user change (e.g., after re-login)
                             if let userId = newUserId {
-                                booksViewModel.setUserId(userId)
+                                setupViewModels(userId: userId)
+                                SubscriptionManager.shared.setUserId(userId)
+                                
+                                if let settings = session.userSettings {
+                                    SubscriptionManager.shared.loadPremiumStatusFromBackend(settings)
+                                }
+                                
                                 Task {
                                     await loadUserData()
                                 }
+                            } else {
+                                // User logged out - clear subscription manager user ID
+                                SubscriptionManager.shared.clearUserId()
                             }
                         }
                 } else {
@@ -153,6 +170,37 @@ struct BookVocabApp: App {
                     showPasswordReset = false
                 })
                 .environmentObject(session)
+            }
+        }
+    }
+    
+    // MARK: - Setup
+    
+    /// Sets up ViewModels with user ID and stats callbacks.
+    /// - Parameter userId: The current user's ID
+    private func setupViewModels(userId: UUID) {
+        // Set user IDs
+        booksViewModel.setUserId(userId)
+        vocabViewModel.setUserId(userId)
+        
+        // Connect stats callbacks to session's profile stats
+        booksViewModel.onStatsChanged = { [weak session] stat, amount in
+            Task { @MainActor in
+                if amount > 0 {
+                    await session?.incrementProfileStat(stat, by: amount)
+                } else {
+                    await session?.decrementProfileStat(stat, by: -amount)
+                }
+            }
+        }
+        
+        vocabViewModel.onStatsChanged = { [weak session] stat, amount in
+            Task { @MainActor in
+                if amount > 0 {
+                    await session?.incrementProfileStat(stat, by: amount)
+                } else {
+                    await session?.decrementProfileStat(stat, by: -amount)
+                }
             }
         }
     }

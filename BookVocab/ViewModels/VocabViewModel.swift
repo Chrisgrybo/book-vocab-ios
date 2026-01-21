@@ -92,6 +92,13 @@ class VocabViewModel: ObservableObject {
     /// Cancellables for Combine subscriptions.
     private var cancellables = Set<AnyCancellable>()
     
+    /// The current user's ID.
+    private var currentUserId: UUID?
+    
+    /// Callback for when stats change (words added/deleted/mastered).
+    /// Used to notify UserSessionViewModel to update profile stats.
+    var onStatsChanged: ((String, Int) -> Void)?
+    
     // MARK: - Initialization
     
     /// Creates a new VocabViewModel with optional dependency injection.
@@ -113,14 +120,16 @@ class VocabViewModel: ObservableObject {
         
         setupNetworkObserver()
         
-        // Load sample data for scaffolding in DEBUG
-        #if DEBUG
-        if allWords.isEmpty {
-            self.allWords = VocabWord.samples
-        }
-        #endif
-        
         logger.info("📝 VocabViewModel initialized")
+    }
+    
+    // MARK: - User ID Management
+    
+    /// Sets the current user ID for fetching words.
+    /// - Parameter userId: The user's ID.
+    func setUserId(_ userId: UUID) {
+        self.currentUserId = userId
+        logger.debug("📝 User ID set: \(userId.uuidString.prefix(8))")
     }
     
     // MARK: - Network Observer
@@ -145,6 +154,11 @@ class VocabViewModel: ObservableObject {
     /// Fetches all vocabulary words for the current user.
     /// Loads from cache first, then fetches from Supabase if online.
     func fetchAllWords() async {
+        guard let userId = currentUserId else {
+            logger.warning("📝 Cannot fetch words - no user ID set")
+            return
+        }
+        
         isLoading = true
         errorMessage = nil
         
@@ -159,18 +173,21 @@ class VocabViewModel: ObservableObject {
         if networkMonitor.isConnected {
             logger.debug("📝 Fetching vocab words from Supabase...")
             
-            // TODO: Replace with actual Supabase fetch
             do {
-                try await Task.sleep(nanoseconds: 500_000_000) // Simulate network delay
+                let remoteWords = try await supabaseService.fetchAllVocabWords(for: userId)
+                allWords = remoteWords
                 
-                // Placeholder: In real implementation:
-                // let remoteWords = try await supabaseService.fetchAllVocabWords()
-                // allWords = remoteWords
-                // cacheService.saveVocabWords(remoteWords, needsSync: false)
+                // Update cache with remote data
+                for word in remoteWords {
+                    cacheService.saveVocabWord(word, needsSync: false)
+                }
                 
-                logger.info("📝 Vocab words synced from Supabase")
+                logger.info("📝 Fetched \(remoteWords.count) vocab words from Supabase")
             } catch {
-                errorMessage = "Failed to fetch vocab words: \(error.localizedDescription)"
+                // If fetch fails but we have cached data, continue with cache
+                if allWords.isEmpty {
+                    errorMessage = "Failed to fetch vocab words: \(error.localizedDescription)"
+                }
                 logger.error("📝 Failed to fetch from Supabase: \(error.localizedDescription)")
             }
         } else {
@@ -195,7 +212,7 @@ class VocabViewModel: ObservableObject {
     }
     
     /// Adds a new vocabulary word.
-    /// Saves to cache immediately and queues sync to Supabase.
+    /// Saves to cache immediately and syncs to Supabase if online.
     /// - Parameter word: The vocab word to add
     func addWord(_ word: VocabWord) async {
         isLoading = true
@@ -203,35 +220,38 @@ class VocabViewModel: ObservableObject {
         
         logger.info("📝 Adding vocab word: '\(word.word)'")
         
-        // Add to local array immediately
-        allWords.append(word)
+        // Add to local array immediately for responsive UI
+        allWords.insert(word, at: 0)  // Insert at top (most recent)
         
         // Save to cache (will queue for sync if offline)
-        cacheService.saveVocabWord(word, needsSync: true)
+        cacheService.saveVocabWord(word, needsSync: !networkMonitor.isConnected)
         
-        // If online, also sync to Supabase
+        // If online, sync to Supabase
         if networkMonitor.isConnected {
-            // TODO: Implement actual Supabase insert
             do {
-                try await Task.sleep(nanoseconds: 300_000_000) // Simulate network delay
-                // await supabaseService.insertVocabWord(word)
+                try await supabaseService.insertVocabWord(word)
                 logger.info("📝 Vocab word synced to Supabase")
+                
+                // Mark as synced in cache
+                cacheService.saveVocabWord(word, needsSync: false)
             } catch {
                 errorMessage = "Failed to sync vocab word: \(error.localizedDescription)"
                 logger.error("📝 Failed to sync to Supabase: \(error.localizedDescription)")
+                // Word remains in cache with needsSync=true for later retry
             }
         } else {
             logger.debug("📝 Offline - vocab word saved to cache, will sync later")
         }
         
         // Track word added event
-        // Find book title if word is assigned to a book
-        let bookTitle: String? = nil // Would need to look up from BooksViewModel
         AnalyticsService.shared.trackWordAdded(
             word: word.word,
-            bookTitle: bookTitle,
+            bookTitle: nil,
             isGlobal: word.bookId == nil
         )
+        
+        // Update profile stats
+        onStatsChanged?("total_words", 1)
         
         isLoading = false
     }
@@ -256,6 +276,7 @@ class VocabViewModel: ObservableObject {
             let wordDefinition = try await dictionaryService.fetchWord(word)
             
             let vocabWord = VocabWord(
+                userId: currentUserId,
                 bookId: bookId,
                 word: wordDefinition.word,
                 definition: dictionaryService.getPrimaryDefinition(from: wordDefinition) ?? "No definition available",
@@ -274,7 +295,7 @@ class VocabViewModel: ObservableObject {
     }
     
     /// Toggles the mastered status of a vocabulary word.
-    /// Updates cache immediately and queues sync to Supabase.
+    /// Updates cache immediately and syncs to Supabase if online.
     /// - Parameter word: The word to update
     func toggleMastered(_ word: VocabWord) async {
         guard let index = allWords.firstIndex(where: { $0.id == word.id }) else {
@@ -293,13 +314,24 @@ class VocabViewModel: ObservableObject {
         
         // If online, sync to Supabase
         if networkMonitor.isConnected {
-            // TODO: Implement actual Supabase update
-            logger.debug("📝 Syncing mastered status to Supabase")
+            do {
+                try await supabaseService.updateMasteredStatus(word.id, mastered: newStatus)
+                logger.debug("📝 Mastered status synced to Supabase")
+            } catch {
+                logger.error("📝 Failed to sync mastered status: \(error.localizedDescription)")
+            }
         } else {
             logger.debug("📝 Offline - mastered status saved to cache, will sync later")
         }
         
         logger.debug("📝 Updated '\(word.word)' mastered status to \(newStatus)")
+        
+        // Update profile stats
+        if newStatus {
+            onStatsChanged?("mastered_words", 1)
+        } else {
+            onStatsChanged?("mastered_words", -1)
+        }
     }
     
     /// Sets the mastered status of a vocabulary word to a specific value.
@@ -325,11 +357,30 @@ class VocabViewModel: ObservableObject {
         cacheService.updateMasteredStatus(word.id, mastered: mastered)
         logger.debug("📝 Updated cache for word ID: \(word.id.uuidString.prefix(8))")
         
+        // If online, sync to Supabase
+        if networkMonitor.isConnected {
+            do {
+                try await supabaseService.updateMasteredStatus(word.id, mastered: mastered)
+                logger.debug("📝 Mastered status synced to Supabase")
+            } catch {
+                logger.error("📝 Failed to sync mastered status: \(error.localizedDescription)")
+            }
+        }
+        
         logger.info("✅ Successfully set '\(word.word)' mastered status to \(mastered)")
+        
+        // Update profile stats if status changed
+        if previousStatus != mastered {
+            if mastered {
+                onStatsChanged?("mastered_words", 1)
+            } else {
+                onStatsChanged?("mastered_words", -1)
+            }
+        }
     }
     
     /// Updates an existing vocabulary word.
-    /// Updates cache immediately and queues sync to Supabase.
+    /// Updates cache immediately and syncs to Supabase if online.
     /// - Parameter word: The updated word data
     func updateWord(_ word: VocabWord) async throws {
         guard let index = allWords.firstIndex(where: { $0.id == word.id }) else {
@@ -345,12 +396,10 @@ class VocabViewModel: ObservableObject {
         // Update cache (will queue for sync if offline)
         cacheService.updateVocabWord(word)
         
-        // If online, also sync to Supabase
+        // If online, sync to Supabase
         if networkMonitor.isConnected {
-            // TODO: Implement actual Supabase update
             do {
-                try await Task.sleep(nanoseconds: 300_000_000) // Simulate network delay
-                // await supabaseService.updateVocabWord(word)
+                try await supabaseService.updateVocabWord(word)
                 logger.info("📝 Vocab word update synced to Supabase")
             } catch {
                 logger.error("📝 Failed to sync update to Supabase: \(error.localizedDescription)")
@@ -369,7 +418,7 @@ class VocabViewModel: ObservableObject {
     }
     
     /// Deletes a vocabulary word.
-    /// Removes from cache and queues delete for Supabase sync.
+    /// Removes from cache and syncs deletion to Supabase if online.
     /// - Parameter word: The word to delete
     func deleteWord(_ word: VocabWord) async {
         isLoading = true
@@ -377,31 +426,44 @@ class VocabViewModel: ObservableObject {
         
         logger.info("📝 Deleting vocab word: '\(word.word)'")
         
-        // Remove from local array immediately
+        // Remove from local array immediately for responsive UI
         allWords.removeAll { $0.id == word.id }
         
-        // Mark as deleted in cache (will queue for sync)
-        cacheService.deleteVocabWord(word.id, hardDelete: false)
-        
-        // If online, also sync to Supabase
+        // If online, sync deletion to Supabase first
         if networkMonitor.isConnected {
-            // TODO: Implement actual Supabase delete
             do {
-                try await Task.sleep(nanoseconds: 300_000_000) // Simulate network delay
-                // await supabaseService.deleteVocabWord(word.id)
+                try await supabaseService.deleteVocabWord(word.id)
                 logger.info("📝 Vocab word deletion synced to Supabase")
+                
+                // Hard delete from cache after successful remote delete
+                cacheService.deleteVocabWord(word.id, hardDelete: true)
             } catch {
-                errorMessage = "Failed to sync deletion: \(error.localizedDescription)"
-                logger.error("📝 Failed to sync delete to Supabase: \(error.localizedDescription)")
+                errorMessage = "Failed to delete word: \(error.localizedDescription)"
+                logger.error("📝 Failed to delete from Supabase: \(error.localizedDescription)")
+                
+                // Re-add to local array since delete failed
+                allWords.append(word)
+                isLoading = false
+                return
             }
         } else {
-            logger.debug("📝 Offline - deletion saved to cache, will sync later")
+            // Mark as deleted in cache (will queue for sync when back online)
+            cacheService.deleteVocabWord(word.id, hardDelete: false)
+            logger.debug("📝 Offline - deletion queued for sync later")
         }
         
         // Track word deleted event
         AnalyticsService.shared.track(.wordDeleted, properties: [
             AnalyticsProperty.word.rawValue: word.word
         ])
+        
+        // Update profile stats (decrement)
+        onStatsChanged?("total_words", -1)
+        
+        // If word was mastered, also decrement mastered count
+        if word.mastered {
+            onStatsChanged?("mastered_words", -1)
+        }
         
         isLoading = false
     }

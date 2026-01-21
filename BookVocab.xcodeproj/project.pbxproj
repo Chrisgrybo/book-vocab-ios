@@ -13,6 +13,8 @@
 		0615CFBE2EE0D29D003F1843 /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = 0615CFBD2EE0D29D003F1843 /* GoogleMobileAds */; };
 		0615CFC22EE0E76C003F1843 /* Mixpanel in Frameworks */ = {isa = PBXBuildFile; productRef = 0615CFC12EE0E76C003F1843 /* Mixpanel */; };
 		0615CFC42EE0EAE7003F1843 /* AnalyticsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0615CFC32EE0EAE7003F1843 /* AnalyticsService.swift */; };
+		06B666BA2F217300009A3245 /* UserProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06B666B92F217300009A3245 /* UserProfile.swift */; };
+		06B666BC2F217311009A3245 /* UserSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06B666BB2F217311009A3245 /* UserSettings.swift */; };
 		APP001 /* BookVocabApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC001 /* BookVocabApp.swift */; };
 		AST001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = RES001 /* Assets.xcassets */; };
 		AST002 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = RES002 /* Preview Assets.xcassets */; };
@@ -28,6 +30,7 @@
 		SVC006 /* CacheService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC027 /* CacheService.swift */; };
 		SVC007 /* SyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC028 /* SyncService.swift */; };
 		SVC008 /* AdManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC030 /* AdManager.swift */; };
+		SVC009 /* SubscriptionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC038 /* SubscriptionManager.swift */; };
 		VM001 /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC005 /* AuthViewModel.swift */; };
 		VM002 /* BooksViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC006 /* BooksViewModel.swift */; };
 		VM003 /* VocabViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC007 /* VocabViewModel.swift */; };
@@ -51,12 +54,13 @@
 		VW016 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC035 /* SettingsView.swift */; };
 		VW017 /* EditWordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC036 /* EditWordView.swift */; };
 		VW018 /* UpgradeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC037 /* UpgradeView.swift */; };
-		SVC009 /* SubscriptionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC038 /* SubscriptionManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		0615CFBF2EE0D55B003F1843 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		0615CFC32EE0EAE7003F1843 /* AnalyticsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsService.swift; sourceTree = "<group>"; };
+		06B666B92F217300009A3245 /* UserProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfile.swift; sourceTree = "<group>"; };
+		06B666BB2F217311009A3245 /* UserSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserSettings.swift; sourceTree = "<group>"; };
 		PRD001 /* BookVocab.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BookVocab.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		RES001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		RES002 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
@@ -146,6 +150,8 @@
 				SRC002 /* Book.swift */,
 				SRC003 /* VocabWord.swift */,
 				SRC004 /* User.swift */,
+				06B666B92F217300009A3245 /* UserProfile.swift */,
+				06B666BB2F217311009A3245 /* UserSettings.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -373,6 +379,7 @@
 				SEC001 /* Secrets.swift in Sources */,
 				SVC001 /* SupabaseService.swift in Sources */,
 				SVC002 /* DictionaryService.swift in Sources */,
+				06B666BC2F217311009A3245 /* UserSettings.swift in Sources */,
 				SVC003 /* BookSearchService.swift in Sources */,
 				SVC004 /* PersistenceController.swift in Sources */,
 				SVC005 /* NetworkMonitor.swift in Sources */,
@@ -398,6 +405,7 @@
 				VW017 /* EditWordView.swift in Sources */,
 				VW018 /* UpgradeView.swift in Sources */,
 				SVC009 /* SubscriptionManager.swift in Sources */,
+				06B666BA2F217300009A3245 /* UserProfile.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

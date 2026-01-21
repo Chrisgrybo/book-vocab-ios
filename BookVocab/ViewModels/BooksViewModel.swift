@@ -61,6 +61,10 @@ class BooksViewModel: ObservableObject {
     /// The current user's ID.
     private var currentUserId: UUID?
     
+    /// Callback for when stats change (books added/deleted).
+    /// Used to notify UserSessionViewModel to update profile stats.
+    var onStatsChanged: ((String, Int) -> Void)?
+    
     // MARK: - Initialization
     
     /// Creates a new BooksViewModel with optional dependency injection.
@@ -78,13 +82,6 @@ class BooksViewModel: ObservableObject {
         self.networkMonitor = networkMonitor
         
         setupNetworkObserver()
-        
-        // Load sample data for scaffolding in DEBUG
-        #if DEBUG
-        if books.isEmpty {
-            self.books = Book.samples
-        }
-        #endif
         
         logger.info("📚 BooksViewModel initialized")
     }
@@ -137,18 +134,21 @@ class BooksViewModel: ObservableObject {
         if networkMonitor.isConnected {
             logger.debug("📚 Fetching books from Supabase...")
             
-            // TODO: Replace with actual Supabase fetch
             do {
-                try await Task.sleep(nanoseconds: 500_000_000) // Simulate network delay
+                let remoteBooks = try await supabaseService.fetchBooks(for: userId)
+                books = remoteBooks
                 
-                // Placeholder: In real implementation:
-                // let remoteBooks = try await supabaseService.fetchBooks(for: userId)
-                // books = remoteBooks
-                // cacheService.saveBooks(remoteBooks, needsSync: false)
+                // Update cache with remote data
+                for book in remoteBooks {
+                    cacheService.saveBook(book, needsSync: false)
+                }
                 
-                logger.info("📚 Books synced from Supabase")
+                logger.info("📚 Fetched \(remoteBooks.count) books from Supabase")
             } catch {
-                errorMessage = "Failed to fetch books: \(error.localizedDescription)"
+                // If fetch fails but we have cached data, continue with cache
+                if books.isEmpty {
+                    errorMessage = "Failed to fetch books: \(error.localizedDescription)"
+                }
                 logger.error("📚 Failed to fetch from Supabase: \(error.localizedDescription)")
             }
         } else {
@@ -159,7 +159,7 @@ class BooksViewModel: ObservableObject {
     }
     
     /// Adds a new book to the user's collection.
-    /// Saves to cache immediately and queues sync to Supabase.
+    /// Saves to cache immediately and syncs to Supabase if online.
     /// - Parameter book: The book to add
     func addBook(_ book: Book) async {
         isLoading = true
@@ -167,22 +167,24 @@ class BooksViewModel: ObservableObject {
         
         logger.info("📚 Adding book: '\(book.title)'")
         
-        // Add to local array immediately
-        books.append(book)
+        // Add to local array immediately for responsive UI
+        books.insert(book, at: 0)  // Insert at top (most recent)
         
         // Save to cache (will queue for sync if offline)
-        cacheService.saveBook(book, needsSync: true)
+        cacheService.saveBook(book, needsSync: !networkMonitor.isConnected)
         
-        // If online, also sync to Supabase
+        // If online, sync to Supabase
         if networkMonitor.isConnected {
-            // TODO: Implement actual Supabase insert
             do {
-                try await Task.sleep(nanoseconds: 300_000_000) // Simulate network delay
-                // await supabaseService.insertBook(book)
+                try await supabaseService.insertBook(book)
                 logger.info("📚 Book synced to Supabase")
+                
+                // Mark as synced in cache
+                cacheService.saveBook(book, needsSync: false)
             } catch {
                 errorMessage = "Failed to sync book: \(error.localizedDescription)"
                 logger.error("📚 Failed to sync to Supabase: \(error.localizedDescription)")
+                // Book remains in cache with needsSync=true for later retry
             }
         } else {
             logger.debug("📚 Offline - book saved to cache, will sync later")
@@ -194,6 +196,9 @@ class BooksViewModel: ObservableObject {
             author: book.author,
             hasCover: book.coverImageUrl != nil
         )
+        
+        // Update profile stats
+        onStatsChanged?("total_books", 1)
         
         isLoading = false
     }
@@ -215,7 +220,7 @@ class BooksViewModel: ObservableObject {
     }
     
     /// Deletes a book from the user's collection.
-    /// Removes from cache and queues delete for Supabase sync.
+    /// Removes from cache and syncs deletion to Supabase if online.
     /// - Parameter book: The book to delete
     func deleteBook(_ book: Book) async {
         isLoading = true
@@ -223,29 +228,37 @@ class BooksViewModel: ObservableObject {
         
         logger.info("📚 Deleting book: '\(book.title)'")
         
-        // Remove from local array immediately
+        // Remove from local array immediately for responsive UI
         books.removeAll { $0.id == book.id }
         
-        // Mark as deleted in cache (will queue for sync)
-        cacheService.deleteBook(book.id, hardDelete: false)
-        
-        // If online, also sync to Supabase
+        // If online, sync deletion to Supabase first
         if networkMonitor.isConnected {
-            // TODO: Implement actual Supabase delete
             do {
-                try await Task.sleep(nanoseconds: 300_000_000) // Simulate network delay
-                // await supabaseService.deleteBook(book.id)
+                try await supabaseService.deleteBook(book.id)
                 logger.info("📚 Book deletion synced to Supabase")
+                
+                // Hard delete from cache after successful remote delete
+                cacheService.deleteBook(book.id, hardDelete: true)
             } catch {
-                errorMessage = "Failed to sync deletion: \(error.localizedDescription)"
-                logger.error("📚 Failed to sync delete to Supabase: \(error.localizedDescription)")
+                errorMessage = "Failed to delete book: \(error.localizedDescription)"
+                logger.error("📚 Failed to delete from Supabase: \(error.localizedDescription)")
+                
+                // Re-add to local array since delete failed
+                books.append(book)
+                isLoading = false
+                return
             }
         } else {
-            logger.debug("📚 Offline - deletion saved to cache, will sync later")
+            // Mark as deleted in cache (will queue for sync when back online)
+            cacheService.deleteBook(book.id, hardDelete: false)
+            logger.debug("📚 Offline - deletion queued for sync later")
         }
         
         // Track book deleted event
         AnalyticsService.shared.trackBookDeleted(title: book.title)
+        
+        // Update profile stats (decrement)
+        onStatsChanged?("total_books", -1)
         
         isLoading = false
     }

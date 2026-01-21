@@ -17,6 +17,10 @@ struct VocabWord: Identifiable, Codable, Hashable {
     /// Unique identifier for the vocabulary word.
     let id: UUID
     
+    /// The ID of the user who owns this word.
+    /// Required for Supabase RLS policies.
+    let userId: UUID?
+    
     /// The ID of the book this word was found in.
     /// If nil, the word is a "global" word not tied to any specific book.
     let bookId: UUID?
@@ -47,6 +51,7 @@ struct VocabWord: Identifiable, Codable, Hashable {
     /// Maps property names to JSON keys for Supabase compatibility.
     enum CodingKeys: String, CodingKey {
         case id
+        case userId = "user_id"
         case bookId = "book_id"
         case word
         case definition
@@ -62,6 +67,7 @@ struct VocabWord: Identifiable, Codable, Hashable {
     /// Creates a new VocabWord instance with all required properties.
     /// - Parameters:
     ///   - id: Unique identifier (defaults to new UUID)
+    ///   - userId: The owning user's ID (nil when created locally, set before Supabase sync)
     ///   - bookId: The associated book's ID (nil for global words)
     ///   - word: The vocabulary word
     ///   - definition: Word definition
@@ -72,6 +78,7 @@ struct VocabWord: Identifiable, Codable, Hashable {
     ///   - createdAt: Creation timestamp (defaults to now)
     init(
         id: UUID = UUID(),
+        userId: UUID? = nil,
         bookId: UUID? = nil,
         word: String,
         definition: String,
@@ -82,6 +89,7 @@ struct VocabWord: Identifiable, Codable, Hashable {
         createdAt: Date = Date()
     ) {
         self.id = id
+        self.userId = userId
         self.bookId = bookId
         self.word = word
         self.definition = definition

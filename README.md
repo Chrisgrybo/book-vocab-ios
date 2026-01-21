@@ -217,12 +217,21 @@ BookVocab/
   - Offline event queueing
   - User profile management
 
+- [x] **User Profile & Settings**
+  - Editable display name
+  - Progress stats (books, words, mastered, sessions)
+  - Notification preferences
+  - Daily reminder time picker
+  - Preferred study mode setting
+  - Offline caching of profile/settings
+
 ### 🚧 TODO (Future Enhancements)
 
 - [ ] Push notifications for study reminders
 - [ ] Sign in with Apple
 - [ ] Spaced repetition algorithm
 - [ ] Export/import vocabulary lists
+- [ ] Avatar upload
 
 ## 👑 Freemium Model
 
@@ -490,6 +499,78 @@ AnalyticsService.shared.track(.newFeatureUsed, properties: [
 ])
 ```
 
+## 👤 User Profile & Settings
+
+Read & Recall uses `user_profiles` and `user_settings` tables to store user data that persists across devices.
+
+### User Profile (`user_profiles`)
+
+Stores display information and aggregated stats:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `display_name` | TEXT | User's chosen display name |
+| `avatar_url` | TEXT | URL to profile picture (future) |
+| `total_books` | INTEGER | Total books in collection |
+| `total_words` | INTEGER | Total vocabulary words |
+| `mastered_words` | INTEGER | Words marked as mastered |
+| `total_study_sessions` | INTEGER | Completed study sessions |
+
+Stats are automatically updated when:
+- A book is added/deleted
+- A word is added/deleted
+- A word's mastery status changes
+- A study session is completed
+
+### User Settings (`user_settings`)
+
+Stores preferences and subscription status:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `is_premium` | BOOLEAN | Premium subscription active |
+| `subscription_product_id` | TEXT | Active product ID |
+| `subscription_expires_at` | TIMESTAMP | Expiration date |
+| `notifications_enabled` | BOOLEAN | Daily reminders on/off |
+| `daily_reminder_time` | TIME | When to send reminder |
+| `preferred_study_mode` | TEXT | Default study mode |
+| `feature_flags` | JSONB | A/B testing flags |
+
+### Offline Support
+
+Both profile and settings are cached locally for offline use:
+
+```swift
+// Cached in @AppStorage
+@AppStorage("cachedIsPremium") var cachedIsPremium: Bool
+@AppStorage("cachedDisplayName") var cachedDisplayName: String
+// ... etc.
+```
+
+Changes sync to Supabase when online.
+
+### Accessing Profile/Settings
+
+In views, access via `UserSessionViewModel`:
+
+```swift
+@EnvironmentObject var session: UserSessionViewModel
+
+// Get display name
+Text(session.displayName)
+
+// Check premium status
+if session.isPremium {
+    // Premium features
+}
+
+// Get profile stats
+Text("\\(session.userProfile?.totalBooks ?? 0) books")
+
+// Update settings
+try await session.updateNotificationSettings(enabled: true, reminderTime: "09:00")
+```
+
 ## Getting Started
 
 1. **Clone the repository**
@@ -535,34 +616,112 @@ AnalyticsService.shared.track(.newFeatureUsed, properties: [
 
 ### Database Schema (Supabase)
 
+The complete database schema is available in the `supabase/migrations/` folder:
+- `001_initial_schema.sql` - Full schema with comments
+- `001_quick_deploy.sql` - Minimal version for quick deployment
+
+**Quick Setup**: Copy and paste `001_quick_deploy.sql` into your Supabase SQL Editor and run it.
+
+#### Tables Overview
+
 ```sql
 -- Books table
 CREATE TABLE books (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES auth.users(id),
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   author TEXT NOT NULL,
   cover_image_url TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  description TEXT,
+  isbn TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Vocabulary words table
 CREATE TABLE vocab_words (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   book_id UUID REFERENCES books(id) ON DELETE CASCADE,  -- NULL for global words
   word TEXT NOT NULL,
   definition TEXT NOT NULL,
-  synonyms TEXT[] DEFAULT '{}',
-  antonyms TEXT[] DEFAULT '{}',
-  example_sentence TEXT,
-  mastered BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  synonyms TEXT[] NOT NULL DEFAULT '{}',
+  antonyms TEXT[] NOT NULL DEFAULT '{}',
+  example_sentence TEXT DEFAULT '',
+  mastered BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Enable Row Level Security
+-- Study sessions table (for analytics)
+CREATE TABLE study_sessions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  book_id UUID REFERENCES books(id) ON DELETE SET NULL,
+  mode TEXT NOT NULL CHECK (mode IN ('flashcards', 'multiple_choice', 'fill_in_blank')),
+  total_questions INTEGER NOT NULL DEFAULT 0,
+  correct_answers INTEGER NOT NULL DEFAULT 0,
+  mastered_count INTEGER NOT NULL DEFAULT 0,
+  score INTEGER GENERATED ALWAYS AS (
+    CASE WHEN total_questions > 0 THEN (correct_answers * 100) / total_questions ELSE 0 END
+  ) STORED,
+  duration_seconds INTEGER NOT NULL DEFAULT 0,
+  completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- User settings table (premium status & preferences)
+CREATE TABLE user_settings (
+  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  is_premium BOOLEAN NOT NULL DEFAULT FALSE,
+  subscription_product_id TEXT,
+  subscription_expires_at TIMESTAMPTZ,
+  last_restored_purchase TIMESTAMPTZ,
+  notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  daily_reminder_time TIME DEFAULT '08:00',
+  preferred_study_mode TEXT DEFAULT 'flashcards',
+  feature_flags JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- User profiles table (display info & stats)
+CREATE TABLE user_profiles (
+  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  display_name TEXT,
+  avatar_url TEXT,
+  total_books INTEGER NOT NULL DEFAULT 0,
+  total_words INTEGER NOT NULL DEFAULT 0,
+  mastered_words INTEGER NOT NULL DEFAULT 0,
+  total_study_sessions INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Enable Row Level Security on all tables
 ALTER TABLE books ENABLE ROW LEVEL SECURITY;
 ALTER TABLE vocab_words ENABLE ROW LEVEL SECURITY;
+ALTER TABLE study_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
 ```
+
+#### Row Level Security (RLS)
+
+All tables have RLS policies that ensure users can only access their own data:
+
+```sql
+-- Example policy for books
+CREATE POLICY "Users can view their own books"
+  ON books FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert their own books"
+  ON books FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update their own books"
+  ON books FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete their own books"
+  ON books FOR DELETE USING (auth.uid() = user_id);
+```
+
+See the full migration files for complete policy definitions.
 
 ## Dependencies
 

@@ -23,6 +23,7 @@ struct FlashcardSessionView: View {
     
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var vocabViewModel: VocabViewModel
+    @EnvironmentObject var session: UserSessionViewModel
     @StateObject private var studyVM = StudyViewModel()
     
     // MARK: - Properties
@@ -85,6 +86,11 @@ struct FlashcardSessionView: View {
                 Text("You've reviewed \(studyVM.currentIndex + 1) of \(studyVM.studyWords.count) words.")
             }
             .onAppear {
+                // Set user ID for saving study sessions to Supabase
+                if let userId = session.currentUser?.id {
+                    studyVM.setUserId(userId)
+                }
+                
                 startSession()
                 withAnimation(AppAnimation.spring.delay(0.1)) {
                     hasAppeared = true

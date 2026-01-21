@@ -103,6 +103,15 @@ class SubscriptionManager: ObservableObject {
     /// Task for listening to transaction updates
     private var updateListenerTask: Task<Void, Error>?
     
+    /// The current user's ID for syncing to backend
+    private var currentUserId: UUID?
+    
+    /// Reference to the Supabase service
+    private let supabaseService = SupabaseService.shared
+    
+    /// Network monitor for checking connectivity
+    private let networkMonitor = NetworkMonitor.shared
+    
     // MARK: - Initialization
     
     private init() {
@@ -116,6 +125,21 @@ class SubscriptionManager: ObservableObject {
         }
         
         logger.info("💎 SubscriptionManager initialized")
+    }
+    
+    // MARK: - User Management
+    
+    /// Sets the current user ID for syncing premium status to backend.
+    /// - Parameter userId: The user's UUID
+    func setUserId(_ userId: UUID) {
+        self.currentUserId = userId
+        logger.debug("💎 User ID set: \(userId.uuidString.prefix(8))")
+    }
+    
+    /// Clears the current user ID (on sign out).
+    func clearUserId() {
+        self.currentUserId = nil
+        logger.debug("💎 User ID cleared")
     }
     
     deinit {
@@ -223,6 +247,16 @@ class SubscriptionManager: ObservableObject {
             try await AppStore.sync()
             await updateSubscriptionStatus()
             
+            // Record restore timestamp in backend
+            if let userId = currentUserId, networkMonitor.isConnected {
+                do {
+                    try await supabaseService.recordPurchaseRestore(userId: userId)
+                    logger.info("💎 Purchase restore recorded in backend")
+                } catch {
+                    logger.error("💎 Failed to record restore: \(error.localizedDescription)")
+                }
+            }
+            
             if isPremium {
                 logger.info("💎 Purchases restored successfully - Premium active")
                 
@@ -260,6 +294,8 @@ class SubscriptionManager: ObservableObject {
         logger.debug("💎 Updating subscription status...")
         
         var hasActiveSubscription = false
+        var productId: String? = nil
+        var expirationDate: Date? = nil
         
         // Check for active subscriptions
         for await result in Transaction.currentEntitlements {
@@ -268,6 +304,7 @@ class SubscriptionManager: ObservableObject {
                 
                 if transaction.productType == .autoRenewable {
                     hasActiveSubscription = true
+                    productId = transaction.productID
                     
                     // Find the corresponding product
                     if let product = products.first(where: { $0.id == transaction.productID }) {
@@ -275,8 +312,9 @@ class SubscriptionManager: ObservableObject {
                     }
                     
                     // Store expiration date
-                    if let expirationDate = transaction.expirationDate {
-                        subscriptionExpirationTimestamp = expirationDate.timeIntervalSince1970
+                    if let expDate = transaction.expirationDate {
+                        subscriptionExpirationTimestamp = expDate.timeIntervalSince1970
+                        expirationDate = expDate
                     }
                     
                     logger.info("💎 Active subscription found: \(transaction.productID)")
@@ -287,6 +325,7 @@ class SubscriptionManager: ObservableObject {
         }
         
         // Update premium status
+        let previousStatus = isPremium
         isPremium = hasActiveSubscription
         persistedPremiumStatus = hasActiveSubscription
         
@@ -295,6 +334,61 @@ class SubscriptionManager: ObservableObject {
         }
         
         logger.info("💎 Premium status: \(self.isPremium)")
+        
+        // Sync to backend if status changed
+        if previousStatus != hasActiveSubscription {
+            await syncPremiumStatusToBackend(
+                isPremium: hasActiveSubscription,
+                productId: productId,
+                expiresAt: expirationDate
+            )
+        }
+    }
+    
+    /// Syncs premium status to the Supabase backend.
+    private func syncPremiumStatusToBackend(isPremium: Bool, productId: String?, expiresAt: Date?) async {
+        guard let userId = currentUserId else {
+            logger.debug("💎 No user ID - skipping backend sync")
+            return
+        }
+        
+        guard networkMonitor.isConnected else {
+            logger.warning("💎 Offline - premium status will sync when online")
+            return
+        }
+        
+        logger.info("💎 Syncing premium status to backend: \(isPremium)")
+        
+        do {
+            try await supabaseService.updatePremiumStatus(
+                userId: userId,
+                isPremium: isPremium,
+                productId: productId,
+                expiresAt: expiresAt
+            )
+            logger.info("💎 Premium status synced to backend successfully")
+        } catch {
+            logger.error("💎 Failed to sync premium status: \(error.localizedDescription)")
+        }
+    }
+    
+    /// Loads premium status from the backend (for cross-device sync).
+    /// - Parameter settings: The user settings from the backend
+    func loadPremiumStatusFromBackend(_ settings: UserSettings) {
+        logger.info("💎 Loading premium status from backend: \(settings.isPremium)")
+        
+        // Only update if StoreKit doesn't have an active subscription
+        // (StoreKit is the source of truth for active subscriptions)
+        if !isPremium && settings.isPremium {
+            // Backend says premium but StoreKit doesn't
+            // This could mean:
+            // 1. Subscription was purchased on another device
+            // 2. Subscription expired and backend hasn't been updated
+            // We should verify with StoreKit
+            Task {
+                await updateSubscriptionStatus()
+            }
+        }
     }
     
     // MARK: - Transaction Listener

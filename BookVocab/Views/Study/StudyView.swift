@@ -23,6 +23,7 @@ struct StudyView: View {
     
     @EnvironmentObject var vocabViewModel: VocabViewModel
     @EnvironmentObject var booksViewModel: BooksViewModel
+    @EnvironmentObject var session: UserSessionViewModel
     @StateObject private var subscriptionManager = SubscriptionManager.shared
     
     // MARK: - State
@@ -98,12 +99,18 @@ struct StudyView: View {
             }
             .fullScreenCover(isPresented: $showingFlashcards) {
                 FlashcardSessionView(source: selectedSource, learningOnly: learningOnly)
+                    .environmentObject(vocabViewModel)
+                    .environmentObject(session)
             }
             .fullScreenCover(isPresented: $showingMultipleChoice) {
                 QuizSessionView(source: selectedSource, quizMode: .multipleChoice)
+                    .environmentObject(vocabViewModel)
+                    .environmentObject(session)
             }
             .fullScreenCover(isPresented: $showingFillInBlank) {
                 QuizSessionView(source: selectedSource, quizMode: .fillInBlank)
+                    .environmentObject(vocabViewModel)
+                    .environmentObject(session)
             }
             // Upgrade modal for premium study modes
             .sheet(isPresented: $showUpgradeModal) {

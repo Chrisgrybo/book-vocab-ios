@@ -34,6 +34,7 @@ struct AddVocabView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var vocabViewModel: VocabViewModel
     @EnvironmentObject var booksViewModel: BooksViewModel
+    @EnvironmentObject var session: UserSessionViewModel
     @StateObject private var subscriptionManager = SubscriptionManager.shared
     
     // MARK: - State
@@ -523,6 +524,7 @@ struct AddVocabView: View {
         }
         
         let vocabWord = VocabWord(
+            userId: session.currentUser?.id,
             bookId: effectiveBookId,
             word: word.trimmingCharacters(in: .whitespacesAndNewlines).capitalized,
             definition: definition.trimmingCharacters(in: .whitespacesAndNewlines),

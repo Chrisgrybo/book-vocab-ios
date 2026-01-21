@@ -23,6 +23,7 @@ struct QuizSessionView: View {
     
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var vocabViewModel: VocabViewModel
+    @EnvironmentObject var session: UserSessionViewModel
     @StateObject private var studyVM = StudyViewModel()
     
     // MARK: - Properties
@@ -89,6 +90,11 @@ struct QuizSessionView: View {
                 Text("You've answered \(studyVM.currentQuestionIndex) of \(studyVM.quizQuestions.count) questions.")
             }
             .onAppear {
+                // Set user ID for saving study sessions to Supabase
+                if let userId = session.currentUser?.id {
+                    studyVM.setUserId(userId)
+                }
+                
                 startQuiz()
                 withAnimation(AppAnimation.spring.delay(0.1)) {
                     hasAppeared = true

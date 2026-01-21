@@ -187,6 +187,21 @@ class StudyViewModel: ObservableObject {
     /// Show session complete view.
     @Published var showSessionComplete: Bool = false
     
+    // MARK: - Private Properties
+    
+    /// The current user's ID for saving sessions.
+    private var currentUserId: UUID?
+    
+    /// Reference to the Supabase service.
+    private let supabaseService = SupabaseService.shared
+    
+    /// Callback for when stats change (study sessions completed).
+    /// Used to notify UserSessionViewModel to update profile stats.
+    var onStatsChanged: ((String, Int) -> Void)?
+    
+    /// Reference to the network monitor.
+    private let networkMonitor = NetworkMonitor.shared
+    
     // MARK: - Computed Properties
     
     /// The current word being studied in flashcard mode.
@@ -254,6 +269,15 @@ class StudyViewModel: ObservableObject {
     /// Creates a new StudyViewModel.
     init() {
         logger.info("📚 StudyViewModel initialized")
+    }
+    
+    // MARK: - User ID Management
+    
+    /// Sets the current user ID for saving sessions to Supabase.
+    /// - Parameter userId: The user's ID.
+    func setUserId(_ userId: UUID) {
+        self.currentUserId = userId
+        logger.debug("📚 User ID set: \(userId.uuidString.prefix(8))")
     }
     
     // MARK: - Session Management
@@ -372,6 +396,46 @@ class StudyViewModel: ObservableObject {
             masteredCount: sessionMasteredWords.count,
             durationSeconds: duration
         )
+        
+        // Save study session to Supabase (if online and user ID is set)
+        if let userId = currentUserId, networkMonitor.isConnected {
+            Task {
+                do {
+                    // Get book ID if studying from a specific book
+                    let bookId: UUID? = {
+                        if case .book(let book) = selectedSource {
+                            return book.id
+                        }
+                        return nil
+                    }()
+                    
+                    // Map study mode to database enum value
+                    let modeString: String = {
+                        switch selectedMode {
+                        case .flashcards: return "flashcards"
+                        case .multipleChoice: return "multiple_choice"
+                        case .fillInBlank: return "fill_in_blank"
+                        }
+                    }()
+                    
+                    try await supabaseService.saveStudySession(
+                        userId: userId,
+                        bookId: bookId,
+                        mode: modeString,
+                        totalQuestions: totalCount,
+                        correctAnswers: correctCount,
+                        masteredCount: sessionMasteredWords.count,
+                        durationSeconds: Int(duration)
+                    )
+                    logger.info("📚 Study session saved to Supabase")
+                } catch {
+                    logger.error("📚 Failed to save study session to Supabase: \(error.localizedDescription)")
+                }
+            }
+        }
+        
+        // Update profile stats (increment study sessions count)
+        onStatsChanged?("total_study_sessions", 1)
         
         isSessionActive = false
         showSessionComplete = true
