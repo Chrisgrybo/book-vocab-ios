@@ -234,6 +234,9 @@ CREATE TABLE IF NOT EXISTS user_settings (
     -- Feature flags (for A/B testing or gradual rollouts)
     feature_flags JSONB DEFAULT '{}',
     
+    -- Whether the user has completed onboarding
+    has_completed_onboarding BOOLEAN NOT NULL DEFAULT FALSE,
+    
     -- Timestamps
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

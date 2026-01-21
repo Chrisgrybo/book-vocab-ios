@@ -81,58 +81,36 @@ struct BookVocabApp: App {
             // based on authentication state
             Group {
                 if session.isAuthenticated {
-                    // User is logged in - show the main app with tab navigation
-                    MainTabView()
+                    // User is logged in - check if onboarding is needed
+                    // Only show onboarding if settings have loaded and confirm it's needed
+                    if session.userSettings != nil && !session.userSettings!.hasCompletedOnboarding {
+                        // Show onboarding for new users who haven't completed it
+                        OnboardingView(onComplete: {
+                            // Settings will update automatically, triggering re-render
+                        })
                         .environmentObject(session)
-                        .environmentObject(booksViewModel)
-                        .environmentObject(vocabViewModel)
-                        .environmentObject(networkMonitor)
-                        .environmentObject(syncService)
-                        .onAppear {
-                            // Set user ID for fetching user-specific data
-                            if let userId = session.currentUser?.id {
-                                setupViewModels(userId: userId)
-                                
-                                // Identify user for analytics
-                                AnalyticsService.shared.identify(userId: userId.uuidString)
-                                
-                                // Set user ID on subscription manager
-                                SubscriptionManager.shared.setUserId(userId)
-                                
-                                // Load premium status from backend if available
-                                if let settings = session.userSettings {
-                                    SubscriptionManager.shared.loadPremiumStatusFromBackend(settings)
-                                }
-                                
-                                // Fetch data on app launch to ensure consistency
-                                Task {
-                                    await loadUserData()
-                                }
-                            }
-                        }
-                        .onChange(of: session.currentUser?.id) { _, newUserId in
-                            // Handle user change (e.g., after re-login)
-                            if let userId = newUserId {
-                                setupViewModels(userId: userId)
-                                SubscriptionManager.shared.setUserId(userId)
-                                
-                                if let settings = session.userSettings {
-                                    SubscriptionManager.shared.loadPremiumStatusFromBackend(settings)
-                                }
-                                
-                                Task {
-                                    await loadUserData()
-                                }
-                            } else {
-                                // User logged out - clear subscription manager user ID
-                                SubscriptionManager.shared.clearUserId()
-                            }
-                        }
+                        .transition(.opacity)
+                    } else {
+                        // User completed onboarding OR settings still loading - show main app
+                        MainTabView()
+                            .environmentObject(session)
+                            .environmentObject(booksViewModel)
+                            .environmentObject(vocabViewModel)
+                            .environmentObject(networkMonitor)
+                            .environmentObject(syncService)
+                            .transition(.opacity)
+                    }
                 } else {
                     // User is not logged in - show login screen
                     LoginView()
                         .environmentObject(session)
                 }
+            }
+            .onAppear {
+                setupOnAppear()
+            }
+            .onChange(of: session.currentUser?.id) { _, newUserId in
+                handleUserChange(newUserId: newUserId)
             }
             // Show loading overlay while checking for existing session
             .overlay {
@@ -171,6 +149,50 @@ struct BookVocabApp: App {
                 })
                 .environmentObject(session)
             }
+        }
+    }
+    
+    // MARK: - Lifecycle
+    
+    /// Called when the app appears - sets up user session if authenticated.
+    private func setupOnAppear() {
+        guard session.isAuthenticated, let userId = session.currentUser?.id else { return }
+        
+        setupViewModels(userId: userId)
+        
+        // Identify user for analytics
+        AnalyticsService.shared.identify(userId: userId.uuidString)
+        
+        // Set user ID on subscription manager
+        SubscriptionManager.shared.setUserId(userId)
+        
+        // Load premium status from backend if available
+        if let settings = session.userSettings {
+            SubscriptionManager.shared.loadPremiumStatusFromBackend(settings)
+        }
+        
+        // Fetch data on app launch to ensure consistency
+        Task {
+            await loadUserData()
+        }
+    }
+    
+    /// Handles user ID changes (login/logout).
+    private func handleUserChange(newUserId: UUID?) {
+        if let userId = newUserId {
+            setupViewModels(userId: userId)
+            SubscriptionManager.shared.setUserId(userId)
+            
+            if let settings = session.userSettings {
+                SubscriptionManager.shared.loadPremiumStatusFromBackend(settings)
+            }
+            
+            Task {
+                await loadUserData()
+            }
+        } else {
+            // User logged out - clear subscription manager user ID
+            SubscriptionManager.shared.clearUserId()
         }
     }
     

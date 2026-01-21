@@ -543,6 +543,42 @@ class UserSessionViewModel: ObservableObject {
         await loadUserData(userId: userId)
     }
     
+    // MARK: - Onboarding
+    
+    /// Whether the user needs to complete onboarding
+    var needsOnboarding: Bool {
+        // If user is authenticated but settings haven't loaded, assume new user
+        guard isAuthenticated else { return false }
+        
+        // If settings exist, check the flag
+        if let settings = userSettings {
+            return !settings.hasCompletedOnboarding
+        }
+        
+        // Settings don't exist yet - this is a new user, show onboarding
+        return true
+    }
+    
+    /// Marks onboarding as complete.
+    func completeOnboarding() async throws {
+        guard let userId = currentUser?.id else {
+            logger.warning("🎓 Cannot complete onboarding - no user")
+            return
+        }
+        
+        logger.info("🎓 Marking onboarding as complete for user: \(userId.uuidString.prefix(8))")
+        
+        var update = UserSettingsUpdate()
+        update.hasCompletedOnboarding = true
+        
+        try await supabaseService.updateUserSettings(userId: userId, update: update)
+        
+        // Update local state
+        userSettings?.hasCompletedOnboarding = true
+        
+        logger.info("🎓 Onboarding marked as complete")
+    }
+    
     /// Increments a profile stat and syncs to server.
     /// - Parameters:
     ///   - stat: The stat to increment (total_books, total_words, mastered_words, total_study_sessions)

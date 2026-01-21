@@ -8,12 +8,23 @@ Read & Recall helps users build their vocabulary by collecting and organizing wo
 
 ## 🚀 Quick Start Guide
 
-### 1. Create an Account
+### 1. Complete Onboarding (New Users)
+New users will see an **onboarding flow** when first launching the app:
+
+1. **Welcome Screen** — Learn about the app's value proposition
+2. **Profile Setup** — Enter your display name (optional)
+3. **Study Preferences** — Choose your preferred study mode and notification settings
+4. **Subscription Paywall** — Start a **1-month free trial** or continue with the free tier
+5. **Completion** — You're all set! Start reading and building vocabulary
+
+> 💡 **Free Trial**: Premium includes unlimited books, unlimited words, all study modes, and no ads. The trial lasts 1 month and can be cancelled anytime.
+
+### 2. Sign In (Returning Users)
 - Launch the app
 - Enter your email and password
-- Tap "Sign Up" to create a new account (or "Sign In" if you have one)
+- Tap "Sign In" to access your account
 
-### 2. Add Your First Book
+### 3. Add Your First Book
 - Tap the **+** button on the Home screen
 - Search for a book by title (covers are auto-fetched from Google Books)
 - Select a result or enter details manually
@@ -123,6 +134,13 @@ BookVocab/
 │   ├── MainTabView.swift        # Main tab navigation
 │   ├── Auth/
 │   │   └── LoginView.swift      # Login/Signup screen
+│   ├── Onboarding/
+│   │   ├── OnboardingView.swift      # Onboarding coordinator
+│   │   ├── WelcomeView.swift         # Welcome screen
+│   │   ├── ProfileSetupView.swift    # Name/avatar setup
+│   │   ├── PreferencesView.swift     # Study preferences
+│   │   ├── PaywallView.swift         # Subscription offer
+│   │   └── OnboardingCompletionView.swift # Success screen
 │   ├── Home/
 │   │   ├── HomeView.swift       # Book list with covers & stats
 │   │   ├── AddBookView.swift    # Add book with cover search
@@ -233,9 +251,17 @@ BookVocab/
 - [ ] Export/import vocabulary lists
 - [ ] Avatar upload
 
-## 👑 Freemium Model
+## 👑 Freemium Model & Subscription
 
-Read & Recall uses a freemium business model with a monthly subscription for premium features.
+Read & Recall uses a freemium business model with a **1-month free trial** and monthly subscription.
+
+### Free Trial (New Users)
+
+New users can start a **1-month free trial** during onboarding:
+- Full premium access for 30 days
+- Automatically converts to paid unless cancelled
+- One trial per Apple ID
+- Cancel anytime in App Store settings
 
 ### Free Tier
 
@@ -254,6 +280,18 @@ Read & Recall uses a freemium business model with a monthly subscription for pre
 | Words per book | Unlimited |
 | Study Modes | All (Flashcards, Multiple Choice, Fill-in-the-Blank) |
 | Ads | Completely removed |
+
+### Onboarding Flow
+
+New users complete a 5-step onboarding:
+
+1. **Welcome** — App introduction and value proposition
+2. **Profile Setup** — Display name (optional)
+3. **Preferences** — Preferred study mode, notification settings
+4. **Paywall** — Free trial offer with clear App Store terms
+5. **Completion** — Success message and next steps
+
+The onboarding only shows once. Returning users skip directly to the main app.
 
 ### Limit Enforcement
 
@@ -275,10 +313,10 @@ if subscriptionManager.canAddBook(currentCount: bookCount) {
 
 The `SubscriptionManager` singleton handles:
 - StoreKit 2 product loading
-- Purchase processing
+- Purchase processing (with free trial support)
 - Restore purchases
 - Subscription status tracking
-- Premium status persistence
+- Premium status persistence to Supabase
 
 ```swift
 // Access subscription status
@@ -288,6 +326,9 @@ The `SubscriptionManager` singleton handles:
 if subscriptionManager.isPremium {
     // Premium features available
 }
+
+// Start free trial / purchase
+await subscriptionManager.purchaseMonthlyPremium()
 
 // Restore purchases
 await subscriptionManager.restorePurchases()

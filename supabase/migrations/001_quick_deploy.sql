@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS user_settings (
     daily_reminder_time TIME,
     preferred_study_mode TEXT DEFAULT 'flashcards',
     feature_flags JSONB DEFAULT '{}',
+    has_completed_onboarding BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

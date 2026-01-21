@@ -15,6 +15,12 @@
 		0615CFC42EE0EAE7003F1843 /* AnalyticsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0615CFC32EE0EAE7003F1843 /* AnalyticsService.swift */; };
 		06B666BA2F217300009A3245 /* UserProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06B666B92F217300009A3245 /* UserProfile.swift */; };
 		06B666BC2F217311009A3245 /* UserSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06B666BB2F217311009A3245 /* UserSettings.swift */; };
+		06B666C42F217ADC009A3245 /* PaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06B666BF2F217ADC009A3245 /* PaywallView.swift */; };
+		06B666C52F217ADC009A3245 /* PreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06B666C02F217ADC009A3245 /* PreferencesView.swift */; };
+		06B666C62F217ADC009A3245 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06B666C22F217ADC009A3245 /* WelcomeView.swift */; };
+		06B666C72F217ADC009A3245 /* ProfileSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06B666C12F217ADC009A3245 /* ProfileSetupView.swift */; };
+		06B666C82F217ADC009A3245 /* OnboardingCompletionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06B666BD2F217ADC009A3245 /* OnboardingCompletionView.swift */; };
+		06B666C92F217ADC009A3245 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06B666BE2F217ADC009A3245 /* OnboardingView.swift */; };
 		APP001 /* BookVocabApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC001 /* BookVocabApp.swift */; };
 		AST001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = RES001 /* Assets.xcassets */; };
 		AST002 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = RES002 /* Preview Assets.xcassets */; };
@@ -61,6 +67,12 @@
 		0615CFC32EE0EAE7003F1843 /* AnalyticsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsService.swift; sourceTree = "<group>"; };
 		06B666B92F217300009A3245 /* UserProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfile.swift; sourceTree = "<group>"; };
 		06B666BB2F217311009A3245 /* UserSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserSettings.swift; sourceTree = "<group>"; };
+		06B666BD2F217ADC009A3245 /* OnboardingCompletionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingCompletionView.swift; sourceTree = "<group>"; };
+		06B666BE2F217ADC009A3245 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		06B666BF2F217ADC009A3245 /* PaywallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaywallView.swift; sourceTree = "<group>"; };
+		06B666C02F217ADC009A3245 /* PreferencesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesView.swift; sourceTree = "<group>"; };
+		06B666C12F217ADC009A3245 /* ProfileSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileSetupView.swift; sourceTree = "<group>"; };
+		06B666C22F217ADC009A3245 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
 		PRD001 /* BookVocab.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BookVocab.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		RES001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		RES002 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
@@ -120,6 +132,19 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		06B666C32F217ADC009A3245 /* Onboarding */ = {
+			isa = PBXGroup;
+			children = (
+				06B666BD2F217ADC009A3245 /* OnboardingCompletionView.swift */,
+				06B666BE2F217ADC009A3245 /* OnboardingView.swift */,
+				06B666BF2F217ADC009A3245 /* PaywallView.swift */,
+				06B666C02F217ADC009A3245 /* PreferencesView.swift */,
+				06B666C12F217ADC009A3245 /* ProfileSetupView.swift */,
+				06B666C22F217ADC009A3245 /* WelcomeView.swift */,
+			);
+			path = Onboarding;
+			sourceTree = "<group>";
+		};
 		GRP001 /* BookVocab */ = {
 			isa = PBXGroup;
 			children = (
@@ -171,6 +196,7 @@
 		GRP005 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				06B666C32F217ADC009A3245 /* Onboarding */,
 				SRC013 /* MainTabView.swift */,
 				GRP008 /* Auth */,
 				GRP009 /* Home */,
@@ -388,6 +414,12 @@
 				VW001 /* LoginView.swift in Sources */,
 				VW002 /* MainTabView.swift in Sources */,
 				VW003 /* HomeView.swift in Sources */,
+				06B666C42F217ADC009A3245 /* PaywallView.swift in Sources */,
+				06B666C52F217ADC009A3245 /* PreferencesView.swift in Sources */,
+				06B666C62F217ADC009A3245 /* WelcomeView.swift in Sources */,
+				06B666C72F217ADC009A3245 /* ProfileSetupView.swift in Sources */,
+				06B666C82F217ADC009A3245 /* OnboardingCompletionView.swift in Sources */,
+				06B666C92F217ADC009A3245 /* OnboardingView.swift in Sources */,
 				VW004 /* AddBookView.swift in Sources */,
 				VW005 /* BookDetailView.swift in Sources */,
 				VW006 /* AddVocabView.swift in Sources */,

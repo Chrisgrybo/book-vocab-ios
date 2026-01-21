@@ -41,6 +41,9 @@ struct UserSettings: Codable, Equatable {
     /// Feature flags for A/B testing or gradual rollouts
     var featureFlags: [String: Bool]
     
+    /// Whether the user has completed onboarding
+    var hasCompletedOnboarding: Bool
+    
     /// Timestamp when the settings were created
     let createdAt: Date
     
@@ -59,6 +62,7 @@ struct UserSettings: Codable, Equatable {
         case dailyReminderTime = "daily_reminder_time"
         case preferredStudyMode = "preferred_study_mode"
         case featureFlags = "feature_flags"
+        case hasCompletedOnboarding = "has_completed_onboarding"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
@@ -77,6 +81,7 @@ struct UserSettings: Codable, Equatable {
         dailyReminderTime: String? = "08:00",
         preferredStudyMode: String = "flashcards",
         featureFlags: [String: Bool] = [:],
+        hasCompletedOnboarding: Bool = false,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
@@ -89,6 +94,7 @@ struct UserSettings: Codable, Equatable {
         self.dailyReminderTime = dailyReminderTime
         self.preferredStudyMode = preferredStudyMode
         self.featureFlags = featureFlags
+        self.hasCompletedOnboarding = hasCompletedOnboarding
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
@@ -127,6 +133,9 @@ struct UserSettings: Codable, Equatable {
         } else {
             featureFlags = [:]
         }
+        
+        // Handle has_completed_onboarding (default to false if not present)
+        hasCompletedOnboarding = (try? container.decode(Bool.self, forKey: .hasCompletedOnboarding)) ?? false
     }
     
     // MARK: - Computed Properties
@@ -162,6 +171,7 @@ struct UserSettingsInsert: Codable {
     var dailyReminderTime: String?
     var preferredStudyMode: String
     var featureFlags: [String: Bool]
+    var hasCompletedOnboarding: Bool
     
     enum CodingKeys: String, CodingKey {
         case userId = "user_id"
@@ -173,6 +183,7 @@ struct UserSettingsInsert: Codable {
         case dailyReminderTime = "daily_reminder_time"
         case preferredStudyMode = "preferred_study_mode"
         case featureFlags = "feature_flags"
+        case hasCompletedOnboarding = "has_completed_onboarding"
     }
     
     /// Creates an insert model with default values for a new user.
@@ -186,6 +197,7 @@ struct UserSettingsInsert: Codable {
         self.dailyReminderTime = "08:00"
         self.preferredStudyMode = "flashcards"
         self.featureFlags = [:]
+        self.hasCompletedOnboarding = false
     }
 }
 
@@ -201,6 +213,7 @@ struct UserSettingsUpdate: Codable {
     var dailyReminderTime: String?
     var preferredStudyMode: String?
     var featureFlags: [String: Bool]?
+    var hasCompletedOnboarding: Bool?
     
     enum CodingKeys: String, CodingKey {
         case isPremium = "is_premium"
@@ -211,5 +224,6 @@ struct UserSettingsUpdate: Codable {
         case dailyReminderTime = "daily_reminder_time"
         case preferredStudyMode = "preferred_study_mode"
         case featureFlags = "feature_flags"
+        case hasCompletedOnboarding = "has_completed_onboarding"
     }
 }
