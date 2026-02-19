@@ -128,6 +128,17 @@ struct HomeView: View {
             .sheet(isPresented: $showingAddBook) {
                 AddBookView()
             }
+            .onChange(of: showingAddBook) { _, isShowing in
+                // Force refresh when sheet closes
+                if !isShowing {
+                    // Trigger view update by toggling a state
+                    Task { @MainActor in
+                        // Small delay to ensure book is saved
+                        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s
+                        booksViewModel.objectWillChange.send()
+                    }
+                }
+            }
             // Upgrade modal for free tier limits
             .sheet(isPresented: $showUpgradeModal) {
                 UpgradeView(reason: subscriptionManager.upgradeReason)

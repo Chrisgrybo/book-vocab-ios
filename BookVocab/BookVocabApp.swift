@@ -243,17 +243,37 @@ struct BookVocabApp: App {
     
     // MARK: - Deep Link Handling
     
-    /// Handles incoming deep links for password reset.
+    /// Handles incoming deep links for all auth operations.
     /// - Parameter url: The URL the app was opened with
     private func handleDeepLink(_ url: URL) {
         Task {
-            // Check if this is a password reset deep link
-            let isPasswordReset = await session.handlePasswordResetURL(url)
+            // Use the unified auth deep link handler
+            let result = await session.handleAuthDeepLink(url)
             
-            if isPasswordReset {
-                // Show the password reset view
-                await MainActor.run {
+            guard result.handled else {
+                // URL wasn't a valid auth link
+                return
+            }
+            
+            await MainActor.run {
+                switch result.type {
+                case .recovery:
+                    // Password reset - show the password reset view
                     showPasswordReset = true
+                    
+                case .signup, .emailChange:
+                    // Email confirmed - UI will auto-update to show main app
+                    // Clear any pending confirmation state
+                    session.pendingEmailConfirmation = false
+                    session.pendingConfirmationEmail = nil
+                    
+                case .magiclink:
+                    // Magic link login - UI will auto-update
+                    break
+                    
+                case .none:
+                    // Unknown type but auth succeeded
+                    break
                 }
             }
         }

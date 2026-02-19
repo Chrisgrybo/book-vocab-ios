@@ -6,7 +6,7 @@
 //  Handles premium tier unlocking, restore purchases, and persistence.
 //
 //  Freemium Model:
-//  - Free: 6 books, 16 words/book, Flashcards only, ads enabled
+//  - Free: 3 books, 16 words/book, Flashcards only, ads enabled
 //  - Premium: Unlimited books/words, full study modes, no ads
 //
 
@@ -23,7 +23,7 @@ private let logger = Logger(subsystem: "com.bookvocab.app", category: "Subscript
 /// Constants defining free tier limits
 enum FreemiumLimits {
     /// Maximum number of books for free users
-    static let maxBooks: Int = 6
+    static let maxBooks: Int = 3
     
     /// Maximum number of words per book for free users
     static let maxWordsPerBook: Int = 16
@@ -41,7 +41,7 @@ enum FreemiumLimits {
 
 /// Product identifiers for in-app purchases
 enum SubscriptionProduct: String, CaseIterable {
-    /// Monthly subscription ($1.99)
+    /// Monthly subscription ($2.99)
     case monthlyPremium = "com.bookvocab.premium.monthly"
     
     var displayName: String {
@@ -52,7 +52,7 @@ enum SubscriptionProduct: String, CaseIterable {
     
     var price: String {
         switch self {
-        case .monthlyPremium: return "$1.99/month"
+        case .monthlyPremium: return "$2.99/month"
         }
     }
 }
@@ -60,6 +60,16 @@ enum SubscriptionProduct: String, CaseIterable {
 // MARK: - Subscription Manager
 
 /// Singleton manager for handling in-app purchases and subscription status.
+/// 
+/// Premium access is granted when:
+/// 1. User has an active StoreKit subscription (including during trial period)
+/// 2. User is in the 1-month free trial (tracked in backend)
+///
+/// The 1-month free trial with auto-conversion works as follows:
+/// - User taps "Start Free Trial" → StoreKit purchase is initiated
+/// - Apple handles the trial period and auto-conversion
+/// - Trial start date is recorded in Supabase for tracking
+/// - `isPremium` is true during the entire trial period
 @MainActor
 class SubscriptionManager: ObservableObject {
     
@@ -69,8 +79,15 @@ class SubscriptionManager: ObservableObject {
     
     // MARK: - Published Properties
     
-    /// Whether the user has an active premium subscription
+    /// Whether the user has premium access (via subscription OR trial)
+    /// This is the main property for feature gating
     @Published private(set) var isPremium: Bool = false
+    
+    /// Whether the user is currently in their free trial period
+    @Published private(set) var isInTrial: Bool = false
+    
+    /// Days remaining in trial (nil if not in trial)
+    @Published private(set) var trialDaysRemaining: Int?
     
     /// The currently active subscription product
     @Published private(set) var activeSubscription: Product?
@@ -98,6 +115,9 @@ class SubscriptionManager: ObservableObject {
     /// Subscription expiration date (for display purposes)
     @AppStorage("subscriptionExpirationDate") private var subscriptionExpirationTimestamp: Double = 0
     
+    /// Persisted trial start date
+    @AppStorage("trialStartedAt") private var trialStartedAtTimestamp: Double = 0
+    
     // MARK: - Private Properties
     
     /// Task for listening to transaction updates
@@ -105,6 +125,9 @@ class SubscriptionManager: ObservableObject {
     
     /// The current user's ID for syncing to backend
     private var currentUserId: UUID?
+    
+    /// Cached user settings for trial status
+    private var cachedUserSettings: UserSettings?
     
     /// Reference to the Supabase service
     private let supabaseService = SupabaseService.shared
@@ -289,15 +312,17 @@ class SubscriptionManager: ObservableObject {
     
     // MARK: - Subscription Status
     
-    /// Updates the current subscription status
+    /// Updates the current subscription status from StoreKit and backend
+    /// Premium access = active StoreKit subscription OR active free trial
     func updateSubscriptionStatus() async {
         logger.debug("💎 Updating subscription status...")
         
         var hasActiveSubscription = false
+        var isTrialPeriod = false
         var productId: String? = nil
         var expirationDate: Date? = nil
         
-        // Check for active subscriptions
+        // Check for active subscriptions from StoreKit
         for await result in Transaction.currentEntitlements {
             do {
                 let transaction = try checkVerified(result)
@@ -305,6 +330,13 @@ class SubscriptionManager: ObservableObject {
                 if transaction.productType == .autoRenewable {
                     hasActiveSubscription = true
                     productId = transaction.productID
+                    
+                    // Check if this is a trial period (StoreKit 2)
+                    // During trial, the offer type indicates introductory offer
+                    if transaction.offerType == .introductory {
+                        isTrialPeriod = true
+                        logger.info("💎 User is in StoreKit trial period")
+                    }
                     
                     // Find the corresponding product
                     if let product = products.first(where: { $0.id == transaction.productID }) {
@@ -317,28 +349,42 @@ class SubscriptionManager: ObservableObject {
                         expirationDate = expDate
                     }
                     
-                    logger.info("💎 Active subscription found: \(transaction.productID)")
+                    logger.info("💎 Active subscription found: \(transaction.productID), trial: \(isTrialPeriod)")
                 }
             } catch {
                 logger.error("💎 Transaction verification failed: \(error.localizedDescription)")
             }
         }
         
-        // Update premium status
+        // Also check backend trial status (for cross-device sync)
+        var backendTrialActive = false
+        if let settings = cachedUserSettings {
+            backendTrialActive = settings.inFreeTrial
+            if backendTrialActive {
+                trialDaysRemaining = settings.trialDaysRemaining
+                logger.info("💎 Backend trial active, \(self.trialDaysRemaining ?? 0) days remaining")
+            }
+        }
+        
+        // Update trial status
+        isInTrial = isTrialPeriod || backendTrialActive
+        
+        // Premium access = active subscription OR active trial
         let previousStatus = isPremium
-        isPremium = hasActiveSubscription
-        persistedPremiumStatus = hasActiveSubscription
+        let hasPremiumAccess = hasActiveSubscription || backendTrialActive
+        isPremium = hasPremiumAccess
+        persistedPremiumStatus = hasPremiumAccess
         
         if !hasActiveSubscription {
             activeSubscription = nil
         }
         
-        logger.info("💎 Premium status: \(self.isPremium)")
+        logger.info("💎 Premium status: \(self.isPremium), trial: \(self.isInTrial)")
         
         // Sync to backend if status changed
-        if previousStatus != hasActiveSubscription {
+        if previousStatus != hasPremiumAccess {
             await syncPremiumStatusToBackend(
-                isPremium: hasActiveSubscription,
+                isPremium: hasActiveSubscription, // Only the subscription status, not trial
                 productId: productId,
                 expiresAt: expirationDate
             )
@@ -373,22 +419,143 @@ class SubscriptionManager: ObservableObject {
     }
     
     /// Loads premium status from the backend (for cross-device sync).
+    /// This handles both subscription status and trial status.
     /// - Parameter settings: The user settings from the backend
     func loadPremiumStatusFromBackend(_ settings: UserSettings) {
-        logger.info("💎 Loading premium status from backend: \(settings.isPremium)")
+        logger.info("💎 Loading premium status from backend")
+        logger.info("💎 Backend isPremium: \(settings.isPremium), inFreeTrial: \(settings.inFreeTrial)")
         
-        // Only update if StoreKit doesn't have an active subscription
-        // (StoreKit is the source of truth for active subscriptions)
-        if !isPremium && settings.isPremium {
-            // Backend says premium but StoreKit doesn't
-            // This could mean:
-            // 1. Subscription was purchased on another device
-            // 2. Subscription expired and backend hasn't been updated
-            // We should verify with StoreKit
+        // Cache settings for trial status
+        cachedUserSettings = settings
+        
+        // Update trial state from backend
+        isInTrial = settings.inFreeTrial
+        trialDaysRemaining = settings.trialDaysRemaining
+        
+        // Store trial start time locally
+        if let trialStart = settings.premiumTrialStartedAt {
+            trialStartedAtTimestamp = trialStart.timeIntervalSince1970
+        }
+        
+        // Check if user has premium access via trial
+        if settings.inFreeTrial && !isPremium {
+            logger.info("💎 User has active trial from backend, granting premium access")
+            isPremium = true
+            persistedPremiumStatus = true
+        }
+        
+        // Verify with StoreKit for subscription status
+        if settings.isPremium && !isPremium {
+            // Backend says premium subscription but StoreKit doesn't show it
+            // Could mean: purchased on another device, or expired
+            logger.info("💎 Backend shows subscription, verifying with StoreKit...")
             Task {
                 await updateSubscriptionStatus()
             }
         }
+    }
+    
+    // MARK: - Trial Management
+    
+    /// Starts the free trial and initiates the StoreKit subscription.
+    /// The trial is handled by Apple - the user won't be charged until the trial ends.
+    /// - Returns: True if the purchase was initiated successfully
+    @discardableResult
+    func startFreeTrial() async -> Bool {
+        logger.info("💎 Starting free trial...")
+        
+        guard let product = products.first(where: { $0.id == SubscriptionProduct.monthlyPremium.rawValue }) else {
+            logger.error("💎 Monthly premium product not found")
+            errorMessage = "Subscription not available. Please try again later."
+            return false
+        }
+        
+        isProcessing = true
+        errorMessage = nil
+        
+        do {
+            // Initiate the purchase - Apple handles the trial
+            let result = try await product.purchase()
+            
+            switch result {
+            case .success(let verification):
+                let transaction = try checkVerified(verification)
+                
+                // Record trial start in backend
+                if let userId = currentUserId {
+                    do {
+                        let started = try await supabaseService.startFreeTrial(userId: userId)
+                        if started {
+                            logger.info("💎 Trial start recorded in backend")
+                            // Update local cache
+                            cachedUserSettings?.premiumTrialStartedAt = Date()
+                            isInTrial = true
+                            trialDaysRemaining = 30
+                        }
+                    } catch {
+                        logger.error("💎 Failed to record trial start: \(error.localizedDescription)")
+                        // Continue anyway - the StoreKit purchase succeeded
+                    }
+                }
+                
+                // Update subscription status
+                await updateSubscriptionStatus()
+                
+                // Finish the transaction
+                await transaction.finish()
+                
+                logger.info("💎 Free trial started successfully!")
+                
+                // Track analytics
+                AnalyticsService.shared.track(.trialStarted, properties: [
+                    "product_id": product.id,
+                    "price": NSDecimalNumber(decimal: product.price).doubleValue
+                ])
+                
+                isProcessing = false
+                return true
+                
+            case .userCancelled:
+                logger.debug("💎 User cancelled trial signup")
+                isProcessing = false
+                return false
+                
+            case .pending:
+                logger.debug("💎 Trial signup pending approval")
+                errorMessage = "Purchase is pending approval"
+                isProcessing = false
+                return false
+                
+            @unknown default:
+                logger.warning("💎 Unknown purchase result")
+                isProcessing = false
+                return false
+            }
+        } catch {
+            logger.error("💎 Trial signup failed: \(error.localizedDescription)")
+            errorMessage = "Failed to start trial: \(error.localizedDescription)"
+            
+            AnalyticsService.shared.track(.purchaseFailed, properties: [
+                "error": error.localizedDescription,
+                "type": "trial"
+            ])
+            
+            isProcessing = false
+            return false
+        }
+    }
+    
+    /// Whether the user can start a free trial (hasn't used it before)
+    var canStartTrial: Bool {
+        // Check if user already used trial
+        if let settings = cachedUserSettings, settings.hasUsedTrial {
+            return false
+        }
+        // Check local cache
+        if trialStartedAtTimestamp > 0 {
+            return false
+        }
+        return true
     }
     
     // MARK: - Transaction Listener

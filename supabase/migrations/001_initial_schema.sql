@@ -223,6 +223,9 @@ CREATE TABLE IF NOT EXISTS user_settings (
     subscription_product_id TEXT,  -- e.g., 'com.bookvocab.premium.monthly'
     subscription_expires_at TIMESTAMPTZ,
     
+    -- Free trial tracking
+    premium_trial_started_at TIMESTAMPTZ,  -- When 1-month trial was started (NULL if never)
+    
     -- Last time purchases were restored
     last_restored_purchase TIMESTAMPTZ,
     

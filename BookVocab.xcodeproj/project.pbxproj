@@ -13,6 +13,7 @@
 		0615CFBE2EE0D29D003F1843 /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = 0615CFBD2EE0D29D003F1843 /* GoogleMobileAds */; };
 		0615CFC22EE0E76C003F1843 /* Mixpanel in Frameworks */ = {isa = PBXBuildFile; productRef = 0615CFC12EE0E76C003F1843 /* Mixpanel */; };
 		0615CFC42EE0EAE7003F1843 /* AnalyticsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0615CFC32EE0EAE7003F1843 /* AnalyticsService.swift */; };
+		06B2011E2F3D0C2500DF0183 /* EmailConfirmationPendingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06B2011D2F3D0C2500DF0183 /* EmailConfirmationPendingView.swift */; };
 		06B666BA2F217300009A3245 /* UserProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06B666B92F217300009A3245 /* UserProfile.swift */; };
 		06B666BC2F217311009A3245 /* UserSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06B666BB2F217311009A3245 /* UserSettings.swift */; };
 		06B666C42F217ADC009A3245 /* PaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06B666BF2F217ADC009A3245 /* PaywallView.swift */; };
@@ -65,6 +66,7 @@
 /* Begin PBXFileReference section */
 		0615CFBF2EE0D55B003F1843 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		0615CFC32EE0EAE7003F1843 /* AnalyticsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsService.swift; sourceTree = "<group>"; };
+		06B2011D2F3D0C2500DF0183 /* EmailConfirmationPendingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailConfirmationPendingView.swift; sourceTree = "<group>"; };
 		06B666B92F217300009A3245 /* UserProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfile.swift; sourceTree = "<group>"; };
 		06B666BB2F217311009A3245 /* UserSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserSettings.swift; sourceTree = "<group>"; };
 		06B666BD2F217ADC009A3245 /* OnboardingCompletionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingCompletionView.swift; sourceTree = "<group>"; };
@@ -205,6 +207,7 @@
 				GRP014 /* Settings */,
 				GRP015 /* Premium */,
 				GRP013 /* Components */,
+				06B2011D2F3D0C2500DF0183 /* EmailConfirmationPendingView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -427,6 +430,7 @@
 				VW008 /* StudyView.swift in Sources */,
 				VW009 /* FlashcardView.swift in Sources */,
 				VW010 /* QuizView.swift in Sources */,
+				06B2011E2F3D0C2500DF0183 /* EmailConfirmationPendingView.swift in Sources */,
 				VW011 /* Theme.swift in Sources */,
 				SVC008 /* AdManager.swift in Sources */,
 				VW012 /* AdMRECView.swift in Sources */,

@@ -165,10 +165,13 @@ class BooksViewModel: ObservableObject {
         isLoading = true
         errorMessage = nil
         
-        logger.info("📚 Adding book: '\(book.title)'")
+        logger.info("📚 Adding book: '\(book.title)', cover: \(book.coverImageUrl ?? "none")")
         
         // Add to local array immediately for responsive UI
+        // Force UI update by explicitly notifying
+        objectWillChange.send()
         books.insert(book, at: 0)  // Insert at top (most recent)
+        logger.debug("📚 Book inserted to array, total count: \(self.books.count)")
         
         // Save to cache (will queue for sync if offline)
         cacheService.saveBook(book, needsSync: !networkMonitor.isConnected)

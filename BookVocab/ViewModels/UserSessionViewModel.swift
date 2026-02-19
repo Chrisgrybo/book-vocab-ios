@@ -64,6 +64,13 @@ class UserSessionViewModel: ObservableObject {
     /// Set when an auth operation fails, nil otherwise.
     @Published var errorMessage: String?
     
+    /// Whether the user needs to confirm their email before signing in.
+    /// Set after signup when email confirmation is enabled in Supabase.
+    @Published var pendingEmailConfirmation: Bool = false
+    
+    /// The email address pending confirmation (for display and resend).
+    @Published var pendingConfirmationEmail: String?
+    
     // MARK: - Cached Properties (for offline use)
     
     /// Cached premium status for offline use
@@ -297,9 +304,30 @@ class UserSessionViewModel: ObservableObject {
                 password: password
             )
             
-            // Update our published state with the new user
-            // Note: The user might need to verify their email before
-            // isAuthenticated should be true, depending on your settings
+            // Check if email confirmation is required
+            // If confirmationSentAt is set but emailConfirmedAt is nil, user needs to confirm
+            let needsEmailConfirmation = authResponse.user.emailConfirmedAt == nil
+            
+            if needsEmailConfirmation {
+                // User needs to confirm email before they can sign in
+                pendingEmailConfirmation = true
+                pendingConfirmationEmail = email
+                isAuthenticated = false
+                currentUser = nil
+                
+                logger.info("🔐 Sign up successful, email confirmation required for: \(email)")
+                
+                // Track signup with pending confirmation
+                AnalyticsService.shared.track(.signUp, properties: [
+                    "requires_confirmation": true,
+                    "status": "pending_email_confirmation"
+                ])
+                
+                isLoading = false
+                return
+            }
+            
+            // Email already confirmed (or confirmation not required)
             currentUser = authResponse.user
             isAuthenticated = true
             
@@ -691,6 +719,42 @@ class UserSessionViewModel: ObservableObject {
         }
     }
     
+    /// Resends the email confirmation link to a pending user.
+    ///
+    /// Call this when a user hasn't received or can't find their confirmation email.
+    ///
+    /// - Parameter email: The email address to resend confirmation to
+    /// - Throws: An error if the email fails to send
+    func resendConfirmationEmail(to email: String) async throws {
+        do {
+            try await supabase.auth.resend(
+                email: email,
+                type: .signup
+            )
+            
+            logger.info("🔐 Confirmation email resent to: \(email)")
+            
+            // Track resend
+            AnalyticsService.shared.track(.login, properties: [
+                "action": "confirmation_email_resent"
+            ])
+            
+        } catch let error as AuthError {
+            logger.error("🔐 Failed to resend confirmation: \(error.localizedDescription)")
+            throw error
+        } catch {
+            logger.error("🔐 Failed to resend confirmation: \(error.localizedDescription)")
+            throw error
+        }
+    }
+    
+    /// Clears the pending email confirmation state.
+    /// Call this when user wants to go back to login/signup.
+    func clearPendingConfirmation() {
+        pendingEmailConfirmation = false
+        pendingConfirmationEmail = nil
+    }
+    
     /// Updates the user's password after clicking a reset link from email.
     ///
     /// This method should be called after the user opens the app via
@@ -728,22 +792,138 @@ class UserSessionViewModel: ObservableObject {
     ///
     /// - Parameter url: The deep link URL containing reset tokens
     /// - Returns: True if the URL was a valid password reset link
-    func handlePasswordResetURL(_ url: URL) async -> Bool {
-        // Check if this is a password reset URL
-        guard url.scheme == "bookvocab",
-              url.host == "reset-password" else {
-            return false
+    /// Handles any Supabase auth deep link URL.
+    /// This is the main entry point for all auth-related deep links.
+    ///
+    /// Supabase sends tokens in various formats:
+    /// - bookvocab://confirm-email#access_token=...&type=signup
+    /// - bookvocab://reset-password#access_token=...&type=recovery
+    /// - bookvocab://callback#access_token=...&type=...
+    /// - bookvocab://#access_token=...&type=...
+    ///
+    /// - Parameter url: The deep link URL
+    /// - Returns: A tuple of (handled: Bool, type: String?) indicating if handled and what type
+    func handleAuthDeepLink(_ url: URL) async -> (handled: Bool, type: AuthLinkType?) {
+        guard url.scheme == "bookvocab" else {
+            return (false, nil)
         }
         
+        logger.info("🔐 Handling deep link: \(url.absoluteString)")
+        
+        // Extract the type from fragment or query parameters
+        let linkType = extractAuthType(from: url)
+        
+        logger.info("🔐 Detected auth type: \(linkType?.rawValue ?? "unknown")")
+        
         do {
-            // The Supabase SDK can handle the URL and establish a session
-            // with the tokens from the reset email
-            _ = try await supabase.auth.session(from: url)
-            return true
+            // Let Supabase SDK handle the URL and extract session
+            let session = try await supabase.auth.session(from: url)
+            
+            logger.info("🔐 Session established for user: \(session.user.id.uuidString.prefix(8))")
+            
+            switch linkType {
+            case .signup, .emailChange:
+                // Email confirmation successful
+                pendingEmailConfirmation = false
+                pendingConfirmationEmail = nil
+                currentUser = session.user
+                isAuthenticated = true
+                
+                // Load or create profile/settings
+                await loadUserData(userId: session.user.id)
+                
+                logger.info("🔐 Email confirmed successfully")
+                AnalyticsService.shared.track(.signUp, properties: ["action": "email_confirmed"])
+                
+                return (true, linkType)
+                
+            case .recovery:
+                // Password reset - session established, user can now set new password
+                currentUser = session.user
+                // Don't set isAuthenticated = true yet, wait for password change
+                
+                logger.info("🔐 Password reset session established")
+                return (true, .recovery)
+                
+            case .magiclink:
+                // Magic link login
+                currentUser = session.user
+                isAuthenticated = true
+                await loadUserData(userId: session.user.id)
+                
+                logger.info("🔐 Magic link login successful")
+                return (true, .magiclink)
+                
+            case .none:
+                // Unknown type but session was established
+                currentUser = session.user
+                isAuthenticated = true
+                await loadUserData(userId: session.user.id)
+                
+                logger.info("🔐 Auth successful (unknown type)")
+                return (true, nil)
+            }
+            
         } catch {
-            errorMessage = "Invalid or expired reset link. Please request a new one."
-            return false
+            logger.error("🔐 Failed to handle auth deep link: \(error.localizedDescription)")
+            errorMessage = "Invalid or expired link. Please try again."
+            return (false, linkType)
         }
+    }
+    
+    /// Extracts the auth type from a Supabase deep link URL
+    private func extractAuthType(from url: URL) -> AuthLinkType? {
+        // Supabase puts tokens in the fragment (after #)
+        // Format: bookvocab://callback#access_token=...&type=signup
+        
+        var components: [String: String] = [:]
+        
+        // Check fragment first (most common for Supabase)
+        if let fragment = url.fragment {
+            for pair in fragment.components(separatedBy: "&") {
+                let parts = pair.components(separatedBy: "=")
+                if parts.count == 2 {
+                    components[parts[0]] = parts[1]
+                }
+            }
+        }
+        
+        // Also check query parameters
+        if let queryItems = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems {
+            for item in queryItems {
+                if let value = item.value {
+                    components[item.name] = value
+                }
+            }
+        }
+        
+        // Check the "type" parameter
+        if let type = components["type"] {
+            return AuthLinkType(rawValue: type)
+        }
+        
+        // Fallback: check the URL host/path
+        if let host = url.host {
+            if host.contains("confirm") || host.contains("signup") {
+                return .signup
+            } else if host.contains("reset") || host.contains("recovery") {
+                return .recovery
+            }
+        }
+        
+        return nil
+    }
+    
+    // MARK: - Legacy handlers (for backward compatibility)
+    
+    func handlePasswordResetURL(_ url: URL) async -> Bool {
+        let result = await handleAuthDeepLink(url)
+        return result.handled && result.type == .recovery
+    }
+    
+    func handleEmailConfirmationURL(_ url: URL) async -> Bool {
+        let result = await handleAuthDeepLink(url)
+        return result.handled && (result.type == .signup || result.type == nil)
     }
     
     // MARK: - Error Handling
@@ -769,6 +949,16 @@ class UserSessionViewModel: ObservableObject {
             return error.localizedDescription
         }
     }
+}
+
+// MARK: - Auth Link Types
+
+/// Types of authentication links from Supabase
+enum AuthLinkType: String {
+    case signup = "signup"
+    case recovery = "recovery"
+    case magiclink = "magiclink"
+    case emailChange = "email_change"
 }
 
 // MARK: - Password Errors

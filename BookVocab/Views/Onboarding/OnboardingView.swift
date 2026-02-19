@@ -201,31 +201,20 @@ struct OnboardingView: View {
     }
     
     private func startTrialAndContinue() {
-        logger.info("🎓 Starting free trial")
+        logger.info("🎓 Trial started successfully - moving to completion")
         
-        Task {
-            await subscriptionManager.purchaseMonthlyPremium()
-            
-            // Move to completion regardless (user can dismiss if cancelled)
-            await MainActor.run {
-                nextStep()
-            }
-        }
+        // Trial purchase already handled by PaywallView
+        // This callback is only called on successful trial start
+        // Move to completion step
+        nextStep()
     }
     
     private func restorePurchases() {
-        logger.info("🎓 Restoring purchases from onboarding")
+        logger.info("🎓 Purchases restored - moving to completion")
         
-        Task {
-            await subscriptionManager.restorePurchases()
-            
-            // If restored successfully and premium, move to completion
-            if subscriptionManager.isPremium {
-                await MainActor.run {
-                    nextStep()
-                }
-            }
-        }
+        // Restore handled by PaywallView, this is called on successful restore
+        // Move to completion step
+        nextStep()
     }
     
     private func completeOnboarding() {

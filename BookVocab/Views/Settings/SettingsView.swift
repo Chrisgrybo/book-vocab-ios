@@ -726,7 +726,7 @@ struct SettingsView: View {
                                     .fontWeight(.semibold)
                                     .foregroundStyle(AppColors.primary)
                                 
-                                Text("$1.99/month • Unlock all features")
+                                Text("$2.99/month • Unlock all features")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }

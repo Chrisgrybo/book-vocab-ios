@@ -26,6 +26,9 @@ struct UserSettings: Codable, Equatable {
     /// When the subscription expires
     var subscriptionExpiresAt: Date?
     
+    /// When the free trial was started (nil if never started)
+    var premiumTrialStartedAt: Date?
+    
     /// When purchases were last restored
     var lastRestoredPurchase: Date?
     
@@ -57,6 +60,7 @@ struct UserSettings: Codable, Equatable {
         case isPremium = "is_premium"
         case subscriptionProductId = "subscription_product_id"
         case subscriptionExpiresAt = "subscription_expires_at"
+        case premiumTrialStartedAt = "premium_trial_started_at"
         case lastRestoredPurchase = "last_restored_purchase"
         case notificationsEnabled = "notifications_enabled"
         case dailyReminderTime = "daily_reminder_time"
@@ -76,6 +80,7 @@ struct UserSettings: Codable, Equatable {
         isPremium: Bool = false,
         subscriptionProductId: String? = nil,
         subscriptionExpiresAt: Date? = nil,
+        premiumTrialStartedAt: Date? = nil,
         lastRestoredPurchase: Date? = nil,
         notificationsEnabled: Bool = true,
         dailyReminderTime: String? = "08:00",
@@ -89,6 +94,7 @@ struct UserSettings: Codable, Equatable {
         self.isPremium = isPremium
         self.subscriptionProductId = subscriptionProductId
         self.subscriptionExpiresAt = subscriptionExpiresAt
+        self.premiumTrialStartedAt = premiumTrialStartedAt
         self.lastRestoredPurchase = lastRestoredPurchase
         self.notificationsEnabled = notificationsEnabled
         self.dailyReminderTime = dailyReminderTime
@@ -108,6 +114,7 @@ struct UserSettings: Codable, Equatable {
         isPremium = try container.decode(Bool.self, forKey: .isPremium)
         subscriptionProductId = try container.decodeIfPresent(String.self, forKey: .subscriptionProductId)
         subscriptionExpiresAt = try container.decodeIfPresent(Date.self, forKey: .subscriptionExpiresAt)
+        premiumTrialStartedAt = try container.decodeIfPresent(Date.self, forKey: .premiumTrialStartedAt)
         lastRestoredPurchase = try container.decodeIfPresent(Date.self, forKey: .lastRestoredPurchase)
         notificationsEnabled = try container.decode(Bool.self, forKey: .notificationsEnabled)
         preferredStudyMode = try container.decodeIfPresent(String.self, forKey: .preferredStudyMode) ?? "flashcards"
@@ -147,6 +154,33 @@ struct UserSettings: Codable, Equatable {
         return expiresAt > Date()
     }
     
+    /// Whether the user is currently in their free trial period
+    /// True if trial started less than 1 month ago
+    var inFreeTrial: Bool {
+        guard let trialStart = premiumTrialStartedAt else { return false }
+        let oneMonthAgo = Calendar.current.date(byAdding: .month, value: -1, to: Date()) ?? Date()
+        return trialStart > oneMonthAgo
+    }
+    
+    /// Number of days remaining in the free trial (nil if not in trial)
+    var trialDaysRemaining: Int? {
+        guard inFreeTrial, let trialStart = premiumTrialStartedAt else { return nil }
+        let trialEnd = Calendar.current.date(byAdding: .month, value: 1, to: trialStart) ?? Date()
+        let daysRemaining = Calendar.current.dateComponents([.day], from: Date(), to: trialEnd).day ?? 0
+        return max(0, daysRemaining)
+    }
+    
+    /// Whether the user has ever started a trial (even if expired)
+    var hasUsedTrial: Bool {
+        return premiumTrialStartedAt != nil
+    }
+    
+    /// Whether the user has premium access (via subscription OR active trial)
+    /// This is the main property to check for premium feature gating
+    var hasPremiumAccess: Bool {
+        return isSubscriptionActive || inFreeTrial
+    }
+    
     /// Parsed daily reminder time as Date components
     var reminderTimeComponents: (hour: Int, minute: Int)? {
         guard let timeString = dailyReminderTime else { return nil }
@@ -166,6 +200,7 @@ struct UserSettingsInsert: Codable {
     var isPremium: Bool
     var subscriptionProductId: String?
     var subscriptionExpiresAt: Date?
+    var premiumTrialStartedAt: Date?
     var lastRestoredPurchase: Date?
     var notificationsEnabled: Bool
     var dailyReminderTime: String?
@@ -178,6 +213,7 @@ struct UserSettingsInsert: Codable {
         case isPremium = "is_premium"
         case subscriptionProductId = "subscription_product_id"
         case subscriptionExpiresAt = "subscription_expires_at"
+        case premiumTrialStartedAt = "premium_trial_started_at"
         case lastRestoredPurchase = "last_restored_purchase"
         case notificationsEnabled = "notifications_enabled"
         case dailyReminderTime = "daily_reminder_time"
@@ -192,6 +228,7 @@ struct UserSettingsInsert: Codable {
         self.isPremium = false
         self.subscriptionProductId = nil
         self.subscriptionExpiresAt = nil
+        self.premiumTrialStartedAt = nil
         self.lastRestoredPurchase = nil
         self.notificationsEnabled = true
         self.dailyReminderTime = "08:00"
@@ -208,6 +245,7 @@ struct UserSettingsUpdate: Codable {
     var isPremium: Bool?
     var subscriptionProductId: String?
     var subscriptionExpiresAt: Date?
+    var premiumTrialStartedAt: Date?
     var lastRestoredPurchase: Date?
     var notificationsEnabled: Bool?
     var dailyReminderTime: String?
@@ -219,6 +257,7 @@ struct UserSettingsUpdate: Codable {
         case isPremium = "is_premium"
         case subscriptionProductId = "subscription_product_id"
         case subscriptionExpiresAt = "subscription_expires_at"
+        case premiumTrialStartedAt = "premium_trial_started_at"
         case lastRestoredPurchase = "last_restored_purchase"
         case notificationsEnabled = "notifications_enabled"
         case dailyReminderTime = "daily_reminder_time"

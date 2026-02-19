@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS user_settings (
     is_premium BOOLEAN NOT NULL DEFAULT FALSE,
     subscription_product_id TEXT,
     subscription_expires_at TIMESTAMPTZ,
+    premium_trial_started_at TIMESTAMPTZ,  -- When 1-month trial was started (NULL if never)
     last_restored_purchase TIMESTAMPTZ,
     notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE,
     daily_reminder_time TIME,

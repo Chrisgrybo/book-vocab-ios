@@ -91,6 +91,14 @@ struct UpgradeView: View {
                     showError = true
                 }
             }
+            .onAppear {
+                // Auto-load products when view appears
+                if subscriptionManager.products.isEmpty {
+                    Task {
+                        await subscriptionManager.loadProducts()
+                    }
+                }
+            }
         }
     }
     
@@ -195,20 +203,53 @@ struct UpgradeView: View {
     private var pricingSection: some View {
         VStack(spacing: AppSpacing.md) {
             if let product = subscriptionManager.products.first {
-                // Price display
-                VStack(spacing: AppSpacing.xs) {
-                    Text(product.displayPrice)
-                        .font(.system(size: 36, weight: .bold, design: .rounded))
-                    
-                    Text("per month")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                // Show trial badge if available
+                if subscriptionManager.canStartTrial {
+                    // Trial offer
+                    HStack {
+                        Image(systemName: "gift.fill")
+                            .foregroundStyle(.green)
+                        Text("1 MONTH FREE TRIAL")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.green)
+                    }
+                    .padding(.horizontal, AppSpacing.md)
+                    .padding(.vertical, AppSpacing.xs)
+                    .background(
+                        Capsule()
+                            .fill(Color.green.opacity(0.15))
+                    )
                 }
                 
-                // Purchase button
+                // Price display
+                VStack(spacing: AppSpacing.xs) {
+                    if subscriptionManager.canStartTrial {
+                        Text("Then \(product.displayPrice)/month")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                        
+                        Text("You will not be charged until the trial ends")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text(product.displayPrice)
+                            .font(.system(size: 36, weight: .bold, design: .rounded))
+                        
+                        Text("per month")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                
+                // Purchase button - starts trial if available
                 Button {
                     Task {
-                        await subscriptionManager.purchaseMonthlyPremium()
+                        if subscriptionManager.canStartTrial {
+                            await subscriptionManager.startFreeTrial()
+                        } else {
+                            await subscriptionManager.purchaseMonthlyPremium()
+                        }
                     }
                 } label: {
                     HStack(spacing: AppSpacing.sm) {
@@ -217,7 +258,7 @@ struct UpgradeView: View {
                                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
                         } else {
                             Image(systemName: "crown.fill")
-                            Text("Subscribe Now")
+                            Text(subscriptionManager.canStartTrial ? "Start Free Trial" : "Upgrade")
                                 .fontWeight(.semibold)
                         }
                     }
@@ -236,33 +277,89 @@ struct UpgradeView: View {
                 .disabled(subscriptionManager.isProcessing)
                 
             } else {
-                // Fallback if products not loaded
-                VStack(spacing: AppSpacing.xs) {
-                    Text("$1.99")
-                        .font(.system(size: 36, weight: .bold, design: .rounded))
+                // Fallback if products not loaded - still show trial offer
+                if subscriptionManager.canStartTrial {
+                    // Trial offer badge
+                    HStack {
+                        Image(systemName: "gift.fill")
+                            .foregroundStyle(.green)
+                        Text("1 MONTH FREE TRIAL")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.green)
+                    }
+                    .padding(.horizontal, AppSpacing.md)
+                    .padding(.vertical, AppSpacing.xs)
+                    .background(
+                        Capsule()
+                            .fill(Color.green.opacity(0.15))
+                    )
                     
-                    Text("per month")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                    VStack(spacing: AppSpacing.xs) {
+                        Text("Then $2.99/month")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                        
+                        Text("You will not be charged until the trial ends")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    VStack(spacing: AppSpacing.xs) {
+                        Text("$2.99")
+                            .font(.system(size: 36, weight: .bold, design: .rounded))
+                        
+                        Text("per month")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 
                 Button {
                     Task {
-                        await subscriptionManager.loadProducts()
+                        // Load products first, then purchase
+                        if subscriptionManager.products.isEmpty {
+                            await subscriptionManager.loadProducts()
+                        }
+                        // After loading, attempt purchase if products are now available
+                        if !subscriptionManager.products.isEmpty {
+                            if subscriptionManager.canStartTrial {
+                                await subscriptionManager.startFreeTrial()
+                            } else {
+                                await subscriptionManager.purchaseMonthlyPremium()
+                            }
+                        }
                     }
                 } label: {
-                    Text("Load Pricing")
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 54)
-                        .background(AppColors.primary)
-                        .foregroundStyle(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
+                    HStack(spacing: AppSpacing.sm) {
+                        if subscriptionManager.isProcessing {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        } else {
+                            Image(systemName: "crown.fill")
+                            Text(subscriptionManager.canStartTrial ? "Start Free Trial" : "Upgrade")
+                                .fontWeight(.semibold)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 54)
+                    .background(
+                        LinearGradient(
+                            colors: [Color.orange, Color.yellow],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .foregroundStyle(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
                 }
+                .disabled(subscriptionManager.isProcessing)
             }
             
             // Terms
-            Text("Cancel anytime. Subscription auto-renews monthly.")
+            Text(subscriptionManager.canStartTrial 
+                 ? "Cancel anytime during trial. Subscription auto-renews at \(subscriptionManager.products.first?.displayPrice ?? "$2.99")/month after trial."
+                 : "Cancel anytime. Subscription auto-renews monthly.")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)

@@ -511,6 +511,67 @@ class SupabaseService {
         try await updateUserSettings(userId: userId, update: update)
     }
     
+    // MARK: - Trial Management
+    
+    /// Starts the free trial for a user.
+    /// Records the trial start date in the backend.
+    /// - Parameter userId: The user's UUID
+    /// - Returns: True if trial was started, false if user already used trial
+    func startFreeTrial(userId: UUID) async throws -> Bool {
+        logger.info("🎁 Starting free trial for user: \(userId.uuidString.prefix(8))")
+        
+        // Check if user already has a trial or subscription
+        if let settings = try await fetchUserSettings(for: userId) {
+            if settings.isPremium {
+                logger.info("🎁 User already has premium subscription")
+                return false
+            }
+            if settings.premiumTrialStartedAt != nil {
+                logger.info("🎁 User already used their free trial")
+                return false
+            }
+        }
+        
+        // Start the trial
+        var update = UserSettingsUpdate()
+        update.premiumTrialStartedAt = Date()
+        
+        try await updateUserSettings(userId: userId, update: update)
+        logger.info("🎁 Free trial started successfully")
+        return true
+    }
+    
+    /// Updates trial and subscription status together.
+    /// Use this when syncing StoreKit state to the backend.
+    /// - Parameters:
+    ///   - userId: The user's UUID
+    ///   - isPremium: Whether user has an active subscription
+    ///   - productId: The subscription product ID
+    ///   - expiresAt: When the subscription expires
+    ///   - trialStartedAt: When the trial was started (if applicable)
+    func updateSubscriptionAndTrialStatus(
+        userId: UUID,
+        isPremium: Bool,
+        productId: String? = nil,
+        expiresAt: Date? = nil,
+        trialStartedAt: Date? = nil
+    ) async throws {
+        logger.info("⚙️ Updating subscription/trial status for user: \(userId.uuidString.prefix(8))")
+        
+        var update = UserSettingsUpdate()
+        update.isPremium = isPremium
+        update.subscriptionProductId = productId
+        update.subscriptionExpiresAt = expiresAt
+        
+        // Only update trial start if provided (don't overwrite existing)
+        if let trialStart = trialStartedAt {
+            update.premiumTrialStartedAt = trialStart
+        }
+        
+        try await updateUserSettings(userId: userId, update: update)
+        logger.info("⚙️ Subscription/trial status updated successfully")
+    }
+    
     // MARK: - User Onboarding (Create Profile + Settings)
     
     /// Creates both profile and settings for a new user.

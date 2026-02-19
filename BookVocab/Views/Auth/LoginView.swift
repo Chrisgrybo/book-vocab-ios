@@ -86,6 +86,16 @@ struct LoginView: View {
     // MARK: - Body
     
     var body: some View {
+        // Show email confirmation pending view if needed
+        if session.pendingEmailConfirmation {
+            EmailConfirmationPendingView()
+        } else {
+            loginContent
+        }
+    }
+    
+    /// Main login/signup content
+    private var loginContent: some View {
         ZStack {
             // Background
             AppColors.groupedBackground

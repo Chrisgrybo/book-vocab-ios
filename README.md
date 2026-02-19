@@ -221,9 +221,9 @@ BookVocab/
   - Premium ad-removal option
 
 - [x] **Freemium Model**
-  - Free tier: 6 books, 16 words/book, flashcards only
+  - Free tier: 3 books, 16 words/book, flashcards only
   - Premium tier: Unlimited books/words, all study modes, no ads
-  - Monthly subscription ($1.99) via StoreKit 2
+  - Monthly subscription ($2.99) via StoreKit 2
   - Restore purchases functionality
   - Limit enforcement with upgrade prompts
 
@@ -267,12 +267,12 @@ New users can start a **1-month free trial** during onboarding:
 
 | Feature | Limit |
 |---------|-------|
-| Books | Up to 6 |
+| Books | Up to 3 |
 | Words per book | Up to 16 |
 | Study Modes | Flashcards only |
 | Ads | Enabled (MREC + Interstitial) |
 
-### Premium Tier ($1.99/month)
+### Premium Tier ($2.99/month)
 
 | Feature | Access |
 |---------|--------|
@@ -347,7 +347,7 @@ Freemium events tracked via Mixpanel:
 
 | Product | ID | Price |
 |---------|-----|-------|
-| Monthly Premium | `com.bookvocab.premium.monthly` | $1.99 |
+| Monthly Premium | `com.bookvocab.premium.monthly` | $2.99 |
 
 > ⚠️ **Testing**: Use sandbox testers in App Store Connect for testing purchases during development.
 

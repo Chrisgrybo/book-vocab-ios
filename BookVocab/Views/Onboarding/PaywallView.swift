@@ -6,6 +6,13 @@
 //  Explains premium benefits and offers free trial.
 //  App Store compliant with clear trial terms.
 //
+//  StoreKit 2 Trial Flow:
+//  1. User taps "Start Free Trial"
+//  2. SubscriptionManager.startFreeTrial() initiates StoreKit purchase
+//  3. Apple handles the 1-month trial and auto-conversion
+//  4. Trial start date is synced to Supabase
+//  5. User gets immediate premium access
+//
 
 import SwiftUI
 
@@ -18,8 +25,13 @@ struct PaywallView: View {
     
     // MARK: - Properties
     
+    /// Called when trial is successfully started
     var onStartTrial: () -> Void
+    
+    /// Called when user chooses to continue with free tier
     var onContinueFree: () -> Void
+    
+    /// Called when restore purchases completes
     var onRestorePurchases: () -> Void
     
     // MARK: - State
@@ -40,7 +52,7 @@ struct PaywallView: View {
     // MARK: - Free Limitations
     
     private let freeLimitations: [(icon: String, text: String)] = [
-        ("6.circle", "Up to 6 books"),
+        ("3.circle", "Up to 3 books"),
         ("16.circle", "16 words per book"),
         ("rectangle.on.rectangle.angled", "Flashcards only"),
         ("rectangle.badge.checkmark", "Ads enabled")
@@ -208,20 +220,29 @@ struct PaywallView: View {
                         .font(.headline)
                         .foregroundStyle(AppColors.primary)
                 } else {
-                    Text("Then $1.99/month")
+                    Text("Then $2.99/month")
                         .font(.headline)
                         .foregroundStyle(AppColors.primary)
                 }
                 
-                Text("Cancel anytime during trial • No charge until trial ends")
+                Text("You will not be charged until the trial ends")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+                
+                Text("Cancel anytime during trial")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
             }
             
-            // Start trial button
+            // Start trial button - initiates StoreKit purchase
             Button {
-                onStartTrial()
+                Task {
+                    let success = await subscriptionManager.startFreeTrial()
+                    if success {
+                        onStartTrial()
+                    }
+                }
             } label: {
                 HStack {
                     if subscriptionManager.isProcessing {
@@ -236,9 +257,16 @@ struct PaywallView: View {
                 .frame(maxWidth: .infinity)
             }
             .buttonStyle(.primary)
-            .disabled(subscriptionManager.isProcessing)
+            .disabled(subscriptionManager.isProcessing || !subscriptionManager.canStartTrial)
             
-            // Trial terms
+            // Show message if trial already used
+            if !subscriptionManager.canStartTrial {
+                Text("You've already used your free trial")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+            
+            // Trial terms (App Store required language)
             Text("Payment will be charged to your Apple ID account at the confirmation of purchase. Subscription automatically renews unless it is canceled at least 24 hours before the end of the current period. Your account will be charged for renewal within 24 hours prior to the end of the current period. You can manage and cancel your subscriptions by going to your account settings on the App Store after purchase.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
@@ -326,8 +354,16 @@ struct PaywallView: View {
     
     private var legalSection: some View {
         VStack(spacing: AppSpacing.md) {
-            // Restore purchases
-            Button(action: onRestorePurchases) {
+            // Restore purchases - restores both subscription AND trial status
+            Button {
+                Task {
+                    await subscriptionManager.restorePurchases()
+                    // If premium after restore, trigger callback
+                    if subscriptionManager.isPremium {
+                        onRestorePurchases()
+                    }
+                }
+            } label: {
                 HStack {
                     if subscriptionManager.isProcessing {
                         ProgressView()
@@ -418,7 +454,7 @@ struct LegalDocumentView: View {
             Read & Recall offers a premium subscription with a 1-month free trial:
             - Trial Period: 1 month from the date of subscription
             - After Trial: Automatically converts to paid subscription
-            - Billing: Monthly subscription at $1.99/month
+            - Billing: Monthly subscription at $2.99/month
             - Cancellation: Cancel anytime through App Store settings
             - Refunds: Subject to Apple's refund policy
             
